@@ -3,7 +3,7 @@ import pandas as pd
 import joblib
 
 # Load the XGBoost model
-model = joblib.load("xgboost_ptb_pipeline.pkl")
+model = joblib.load("xgboost-api/xgboost_ptb_pipeline.pkl")
 
 # App title
 st.title("PTB Score Predictor")
