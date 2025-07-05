@@ -1,7 +1,7 @@
 streamlit
 pandas
 joblib
-xgboost
+xgboost==1.7.6
 azure-cosmos
 scikit-learn==1.2.2
 numpy==1.23.5
