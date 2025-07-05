@@ -7,7 +7,7 @@ from azure.cosmos import CosmosClient, PartitionKey, exceptions
 # === Load Model ===
 @st.cache_resource
 def load_model():
-    return joblib.load("xgboost_ptb_pipeline.pkl")
+    return joblib.load("xgboost-api/xgboost_ptb_pipeline.pkl")
 
 model = load_model()
 
