@@ -1,51 +1,42 @@
-from flask import Flask, jsonify
+import streamlit as st
 import pandas as pd
 import joblib
-from azure.cosmos import CosmosClient, PartitionKey
 
-app = Flask(__name__)
+# === Load Trained Model ===
+@st.cache_resource
+def load_model():
+    return joblib.load("xgboost_ptb_pipeline.pkl")
 
-# === Cosmos DB Settings ===
-COSMOS_ENDPOINT = "https://leadnurturecosmosdb.documents.azure.com:443/"
-COSMOS_KEY = "q0AmTLUTz2rJhQDEppSoElKfawnuZVbj5Yqe8lyFbv8bbCIoewm5jqgo8UutqEfnnm28g0Idmg1EACDbpTApqQ=="
-DATABASE_NAME = "Lead_Nurture_DB"
-INPUT_CONTAINER = "CustomerData"
-OUTPUT_CONTAINER = "ScoredLeads"
+model = load_model()
 
-# === Load Model ===
-print("➡ Loading XGBoost model...")
-model = joblib.load("xgboost-api/xgboost_ptb_pipeline.pkl")
-print("✅ Model loaded.")
+# === Streamlit UI ===
+st.title("🎯 PTB Score Predictor")
+st.write("Upload a CSV file containing customer data to score and classify leads.")
 
-@app.route('/score', methods=['GET'])
-def score_customers():
+uploaded_file = st.file_uploader("📤 Upload CSV File", type=["csv"])
+
+if uploaded_file:
     try:
-        print("➡ Connecting to Cosmos DB...")
-        client = CosmosClient(COSMOS_ENDPOINT, COSMOS_KEY)
-        db = client.get_database_client(DATABASE_NAME)
-        input_container = db.get_container_client(INPUT_CONTAINER)
+        df = pd.read_csv(uploaded_file)
 
-        print("➡ Reading all customer data...")
-        raw_items = list(input_container.read_all_items())
-        print(f"✅ Retrieved {len(raw_items)} items.")
+        st.subheader("📄 Uploaded Data Preview")
+        st.dataframe(df.head())
 
-        df = pd.DataFrame(raw_items)
-        print("➡ DataFrame created with shape:", df.shape)
-
+        # Define features expected by the model
         kept_features = [
             'Age', 'Gender', 'Annual Income', 'Income Bracket', 'Marital Status',
             'Employment Status', 'Region', 'Urban/Rural Flag', 'State', 'ZIP Code',
             'Plan Preference Type', 'Web Form Completion Rate', 'Quote Requested',
             'Application Started', 'Behavior Score', 'Application Submitted', 'Application Applied'
         ]
-        df = df[df.columns.intersection(kept_features)]
-        print("➡ Filtered to kept features. Shape now:", df.shape)
 
-        print("➡ Making predictions...")
+        df = df[df.columns.intersection(kept_features)]
+
+        # Run prediction
         predictions = model.predict(df)
         df['PTB_Score'] = predictions
-        print("✅ Predictions complete.")
 
+        # Tier assignment
         def tier(score):
             if score >= 0.8:
                 return "Platinum"
@@ -57,25 +48,15 @@ def score_customers():
                 return "Bronze"
 
         df['Lead_Tier'] = df['PTB_Score'].apply(tier)
-        print("➡ Lead tier assigned.")
 
-        print("➡ Writing results to Cosmos DB...")
-        output_container = db.create_container_if_not_exists(
-            id=OUTPUT_CONTAINER,
-            partition_key=PartitionKey(path="/id")
-        )
+        st.subheader("✅ Prediction Results")
+        st.dataframe(df[['PTB_Score', 'Lead_Tier']].join(df.drop(columns=['PTB_Score', 'Lead_Tier'])))
 
-        for idx, row in df.iterrows():
-            record = row.to_dict()
-            record["id"] = str(idx + 1)
-            output_container.upsert_item(record)
-
-        print(f"✅ Successfully wrote {len(df)} scored leads to Cosmos DB.")
-        return jsonify({"message": f"✅ Scored {len(df)} customers and saved to '{OUTPUT_CONTAINER}'."})
+        # Allow download
+        csv = df.to_csv(index=False).encode('utf-8')
+        st.download_button("⬇️ Download Scored Data", csv, "scored_leads.csv", "text/csv")
 
     except Exception as e:
-        print("❌ Exception occurred:", str(e))
-        return jsonify({"error": str(e)}), 500
-
-if __name__ == '__main__':
-    app.run(debug=True, use_reloader=False)
+        st.error(f"⚠️ Error processing file: {e}")
+else:
+    st.info("Please upload a valid CSV file to continue.")
