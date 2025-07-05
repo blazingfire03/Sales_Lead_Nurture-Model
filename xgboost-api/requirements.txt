@@ -1,9 +1,12 @@
+# requirements.txt
+
 wheel
 setuptools
-streamlit
-pandas
-joblib
+flask                      
+streamlit==1.46.1
+pandas==2.3.0
+joblib==1.5.1
 xgboost==1.7.6
-azure-cosmos
-scikit-learn>=1.3
-numpy>=1.26.0
+azure-cosmos==4.9.0
+scikit-learn==1.1.3
+numpy>=1.24.0              
