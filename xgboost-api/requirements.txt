@@ -1,3 +1,5 @@
-flask
+streamlit
 pandas
 joblib
+xgboost
+azure-cosmos
