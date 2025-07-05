@@ -3,3 +3,5 @@ pandas
 joblib
 xgboost
 azure-cosmos
+scikit-learn==1.7.0
+numpy==1.24.4
