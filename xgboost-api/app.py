@@ -14,7 +14,7 @@ OUTPUT_CONTAINER = "ScoredLeads"
 
 # === Load Model ===
 print("➡ Loading XGBoost model...")
-model = joblib.load("xgboost_ptb_pipeline.pkl")
+model = joblib.load("xgboost-api/xgboost_ptb_pipeline.pkl")
 print("✅ Model loaded.")
 
 @app.route('/score', methods=['GET'])
