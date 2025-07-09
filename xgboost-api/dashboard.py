@@ -44,43 +44,43 @@ df = fetch_data()
 if df.empty:
     st.warning("No data found in Cosmos DB.")
 else:
-    # === Preview Input Data ===
-    st.subheader("📋 Input Data (Preview)")
-    preview_cols = [col for col in df.columns if col not in ['PTB_Score', 'Lead_Tier']]
-    st.dataframe(df[preview_cols].head())
+    # === Tabs ===
+    tab1, tab2 = st.tabs(["📋 Scored Results", "📊 Insights"])
 
-    # === Scored Results Table ===
-    if "PTB_Score" in df.columns and "Lead_Tier" in df.columns:
+    with tab1:
         st.subheader("✅ Scored Results")
         st.dataframe(df)
 
-        # === Chart 1: PTB Score Distribution ===
-        st.subheader("📊 PTB Score Distribution")
-        fig1, ax1 = plt.subplots()
-        df["PTB_Score"].value_counts().sort_index().plot(kind='bar', ax=ax1, color='orange')
-        ax1.set_xlabel("PTB Score")
-        ax1.set_ylabel("Number of Customers")
-        st.pyplot(fig1)
-
-        # === Chart 2: Policy Purchase Outcomes ===
-        if "Policy Purchased" in df.columns:
-            st.subheader("✅ Policy Purchase Outcomes")
-            fig2, ax2 = plt.subplots()
-            df["Policy Purchased"].value_counts().rename(index={0: "Not Purchased", 1: "Purchased"}).plot(kind='bar', ax=ax2, color='orange')
-            ax2.set_ylabel("Number of Customers")
-            st.pyplot(fig2)
-
-        # === Chart 3: Lead Tier Distribution ===
-        st.subheader("🏅 Customers by Lead Tier")
-        fig3, ax3 = plt.subplots()
-        df["Lead_Tier"].value_counts().plot(kind='bar', ax=ax3, color='orange')
-        ax3.set_xlabel("Lead Tier")
-        ax3.set_ylabel("Number of Customers")
-        st.pyplot(fig3)
-
-        # === Download and Upload Buttons ===
         st.download_button("⬇️ Download CSV", df.to_csv(index=False), "scored_results.csv")
         if st.button("🚀 Upload to Cosmos DB"):
             upload_to_cosmos(df)
-    else:
-        st.warning("⚠️ Required columns 'PTB_Score' or 'Lead_Tier' not found.")
+
+    with tab2:
+        st.subheader("📊 PTB Score Distribution")
+        if "PTB_Score" in df.columns:
+            fig1, ax1 = plt.subplots()
+            df["PTB_Score"].value_counts().sort_index().plot(kind='bar', ax=ax1, color='orange')
+            ax1.set_xlabel("PTB Score")
+            ax1.set_ylabel("Number of Customers")
+            st.pyplot(fig1)
+        else:
+            st.warning("⚠️ 'PTB_Score' column not found.")
+
+        st.subheader("✅ Policy Purchase Outcomes")
+        if "Policy Purchased" in df.columns:
+            fig2, ax2 = plt.subplots()
+            df["Policy Purchased"].value_counts().rename(index={0: "Not Purchased", 1: "Purchased"}).plot(kind='bar', ax=ax2, color='green')
+            ax2.set_ylabel("Number of Customers")
+            st.pyplot(fig2)
+        else:
+            st.warning("⚠️ 'Policy Purchased' column not found.")
+
+        st.subheader("🏅 Customers by Lead Tier")
+        if "Lead_Tier" in df.columns:
+            fig3, ax3 = plt.subplots()
+            df["Lead_Tier"].value_counts().plot(kind='bar', ax=ax3, color='purple')
+            ax3.set_xlabel("Lead Tier")
+            ax3.set_ylabel("Number of Customers")
+            st.pyplot(fig3)
+        else:
+            st.warning("⚠️ 'Lead_Tier' column not found.")
