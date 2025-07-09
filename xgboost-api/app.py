@@ -7,7 +7,8 @@ from azure.cosmos import CosmosClient, PartitionKey, exceptions
 # === Load Model ===
 @st.cache_resource
 def load_model():
-    return joblib.load("xgboost-api/xgb_clean.pkl")  # MUST be a clean model without local classes
+    return joblib.load("xgboost_ptb_pipeline.pkl")
+  # MUST be a clean model without local classes
 
 model = load_model()
 
