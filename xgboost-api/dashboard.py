@@ -1,52 +1,84 @@
 import streamlit as st
 import pandas as pd
+import matplotlib.pyplot as plt
 from azure.cosmos import CosmosClient
 
-# Load secrets
+# === Load Secrets ===
 endpoint = st.secrets["COSMOS_ENDPOINT"]
 key = st.secrets["COSMOS_KEY"]
 database_name = st.secrets["DATABASE_NAME"]
 container_name = st.secrets["INPUT_CONTAINER"]
 
-# Cache the Cosmos DB query
+# === Fetch Data from Cosmos DB ===
 @st.cache_data
 def fetch_data():
-    client = CosmosClient(endpoint, credential=key)
-    db = client.get_database_client(database_name)
-    container = db.get_container_client(container_name)
-    items = list(container.read_all_items())
-    return pd.DataFrame(items)
+    try:
+        client = CosmosClient(endpoint, credential=key)
+        db = client.get_database_client(database_name)
+        container = db.get_container_client(container_name)
+        items = list(container.read_all_items())
+        return pd.DataFrame(items)
+    except Exception as e:
+        st.error(f"❌ Failed to fetch data: {e}")
+        return pd.DataFrame()
 
-# Load data
-st.title("📊 Sales Lead Nurture Dashboard")
+# === Upload Data to Cosmos DB ===
+def upload_to_cosmos(df):
+    try:
+        client = CosmosClient(endpoint, credential=key)
+        db = client.get_database_client(database_name)
+        container = db.get_container_client(container_name)
+        for row in df.to_dict(orient="records"):
+            container.upsert_item(row)
+        st.success("✅ Data uploaded to Cosmos DB")
+    except Exception as e:
+        st.error(f"❌ Failed to upload: {e}")
+
+# === Main UI ===
+st.set_page_config(page_title="PTB Score Dashboard", layout="wide")
+st.title("🧠 PTB Score Predictor with Azure Auto Sync")
+
 df = fetch_data()
 
 if df.empty:
-    st.warning("No data found in Cosmos DB.")
+    st.warning("No data available from Cosmos DB.")
 else:
-    # KPI Metrics
-    st.subheader("🔑 Key Metrics")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Leads", len(df))
-    col2.metric("Policies Purchased", df['Policy Purchased'].sum())
-    col3.metric("Conversion Rate (%)", round(100 * df['Policy Purchased'].sum() / len(df), 2))
+    # Preview
+    st.subheader("📋 Input Data (Preview)")
+    st.dataframe(df.head())
 
-    # Filter
-    st.sidebar.header("🔍 Filter Leads")
-    selected_state = st.sidebar.selectbox("Select State", ["All"] + sorted(df['State'].dropna().unique().tolist()))
-    if selected_state != "All":
-        df = df[df["State"] == selected_state]
+    # Scored Results
+    if "PTB_Score" in df.columns and "Lead_Tier" in df.columns:
+        st.subheader("✅ Scored Results")
+        st.dataframe(df)
 
-    # Charts
-    st.subheader("🗺️ Leads by State")
-    st.bar_chart(df["State"].value_counts())
+        # === CHART 1: PTB Score Distribution ===
+        st.subheader("📊 PTB Score Distribution")
+        fig1, ax1 = plt.subplots()
+        df["PTB_Score"].value_counts().sort_index().plot(kind='bar', ax=ax1, color='orange')
+        ax1.set_xlabel("PTB Score")
+        ax1.set_ylabel("Number of Customers")
+        st.pyplot(fig1)
 
-    st.subheader("📈 Application Funnel")
-    funnel_cols = ['Application Started', 'Application Submitted', 'Policy Purchased']
-    funnel_data = df[funnel_cols].sum()
-    st.line_chart(funnel_data)
+        # === CHART 2: Policy Purchase Outcomes ===
+        if "Policy Purchased" in df.columns:
+            st.subheader("✅ Policy Purchase Outcomes")
+            fig2, ax2 = plt.subplots()
+            df["Policy Purchased"].value_counts().rename(index={0: "Not Purchased", 1: "Purchased"}).plot(kind='bar', ax=ax2, color='orange')
+            ax2.set_ylabel("Number of Customers")
+            st.pyplot(fig2)
 
-    st.subheader("📂 Full Data Table")
-    st.dataframe(df)
+        # === CHART 3: Lead Tier Distribution ===
+        st.subheader("🏅 Customers by Lead Tier")
+        fig3, ax3 = plt.subplots()
+        df["Lead_Tier"].value_counts().plot(kind='bar', ax=ax3, color='orange')
+        ax3.set_xlabel("Lead Tier")
+        ax3.set_ylabel("Number of Customers")
+        st.pyplot(fig3)
 
-    st.download_button("Download CSV", df.to_csv(index=False), "leads_data.csv")
+        # === Download + Upload ===
+        st.download_button("⬇️ Download CSV", df.to_csv(index=False), "scored_results.csv")
+        if st.button("🚀 Upload to Cosmos DB"):
+            upload_to_cosmos(df)
+    else:
+        st.warning("⚠️ PTB_Score or Lead_Tier column not found in the dataset.")
