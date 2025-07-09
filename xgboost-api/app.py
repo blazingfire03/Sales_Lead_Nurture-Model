@@ -2,13 +2,14 @@ import streamlit as st
 import pandas as pd
 import joblib
 import uuid
+import os
 from azure.cosmos import CosmosClient, PartitionKey, exceptions
 
 # === Load Model ===
 @st.cache_resource
 def load_model():
-    return joblib.load("xgboost_ptb_pipeline.pkl")
-  # MUST be a clean model without local classes
+    model_path = os.path.join(os.path.dirname(__file__), "xgboost_ptb_pipeline.pkl")
+    return joblib.load(model_path)
 
 model = load_model()
 
@@ -42,7 +43,6 @@ def upload_results(df):
         client = CosmosClient(endpoint, credential=key)
         db = client.get_database_client(database_name)
 
-        # Create output container if it doesn't exist
         container = db.create_container_if_not_exists(
             id=output_container,
             partition_key=PartitionKey(path="/id"),
@@ -71,7 +71,7 @@ else:
     st.subheader("📄 Input Data (Preview)")
     st.dataframe(df.head())
 
-    # Define required features
+    # Required columns
     required_features = [
         'Age', 'Gender', 'Annual Income', 'Income Bracket', 'Marital Status',
         'Employment Status', 'Region', 'Urban/Rural Flag', 'State', 'ZIP Code',
@@ -103,11 +103,9 @@ else:
             st.subheader("✅ Scored Results")
             st.dataframe(df[['PTB_Score', 'Lead_Tier']].join(df.drop(columns=['PTB_Score', 'Lead_Tier'])))
 
-            # Download option
             csv = df.to_csv(index=False).encode('utf-8')
             st.download_button("⬇️ Download CSV", csv, "scored_leads.csv", "text/csv")
 
-            # Upload option
             if st.button("🚀 Upload to Cosmos DB"):
                 upload_results(df)
 
