@@ -84,3 +84,9 @@ else:
             st.pyplot(fig3)
         else:
             st.warning("⚠️ 'Lead_Tier' column not found.")
+
+df = fetch_data()
+
+# ✅ Add this debug line immediately after:
+st.write("🔍 Available columns in the dataset:", df.columns.tolist())
+
