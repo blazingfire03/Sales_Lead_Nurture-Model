@@ -89,11 +89,11 @@ else:
             df['PTB_Score'] = proba
 
             def tier(score):
-                if score >= 0.8:
+                if score >= 0.90:
                     return "Platinum"
-                elif score >= 0.6:
+                elif score >= 0.75:
                     return "Gold"
-                elif score >= 0.4:
+                elif score >= 0.50:
                     return "Silver"
                 else:
                     return "Bronze"
