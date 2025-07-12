@@ -86,14 +86,14 @@ else:
         try:
             input_df = df[required_features]
             proba = model.predict_proba(input_df)[:, 1]
-            df['PTB_Score'] = proba
+            df['PTB_Score'] = proba * 100  # convert to percentage
 
             def tier(score):
-                if score >= 0.90:
+                if score >= 90:
                     return "Platinum"
-                elif score >= 0.75:
+                elif score >= 75:
                     return "Gold"
-                elif score >= 0.50:
+                elif score >= 50:
                     return "Silver"
                 else:
                     return "Bronze"
