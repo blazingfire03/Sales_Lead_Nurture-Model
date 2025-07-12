@@ -85,8 +85,8 @@ else:
     else:
         try:
             input_df = df[required_features]
-            predictions = model.predict(input_df)
-            df['PTB_Score'] = predictions
+            proba = model.predict_proba(input_df)[:, 1]
+            df['PTB_Score'] = proba
 
             def tier(score):
                 if score >= 0.8:
