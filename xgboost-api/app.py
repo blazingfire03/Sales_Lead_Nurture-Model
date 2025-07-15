@@ -115,14 +115,31 @@ else:
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from azure.cosmos import CosmosClient
 
-# Load your data from CosmosDB or local fallback
+# === Load Data from Cosmos DB ===
 @st.cache_data
 def load_data():
-    # Example fallback (replace with Cosmos DB fetch function)
-    return pd.read_excel("Final_Dataset_Updated.xlsx")
+    try:
+        endpoint = st.secrets["COSMOS_ENDPOINT"]
+        key = st.secrets["COSMOS_KEY"]
+        database_name = st.secrets["DATABASE_NAME"]
+        container_name = st.secrets["OUTPUT_CONTAINER"]
 
+        client = CosmosClient(endpoint, credential=key)
+        db = client.get_database_client(database_name)
+        container = db.get_container_client(container_name)
+        items = list(container.read_all_items())
+        return pd.DataFrame(items)
+
+    except Exception as e:
+        st.error(f"❌ Failed to fetch data from Cosmos DB: {e}")
+        return pd.DataFrame()
+
+# === Load & Preprocess ===
 df = load_data()
+if df.empty:
+    st.stop()
 
 # === KPI METRICS ===
 st.title("📈 Sales Lead Nurture Dashboard")
@@ -135,44 +152,48 @@ col3.metric("Conversion Rate", f"{conversion_rate:.2f}%")
 
 st.markdown("---")
 
-# === TABS FOR DIFFERENT CHARTS ===
+# === CHARTS IN TABS ===
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "Lead Tier vs State",
-    "Lead Tier vs Income",
+    "Lead Tier vs Income Bracket",
     "Lead Tier vs Age Group",
     "Lead Tier vs Gender",
-    "PTB Score vs Policy Purchase"
+    "PTB Score vs Policy Purchased"
 ])
 
-# === TAB 1: Lead Tier vs State ===
+# === 1. Lead Tier vs State ===
 with tab1:
-    selected_states = st.multiselect("Filter by State", df["State"].unique(), default=df["State"].unique())
-    filtered_df = df[df["State"].isin(selected_states)]
-    fig = px.histogram(filtered_df, x="State", color="Lead Tier", barmode="group")
+    st.subheader("Lead Tier Distribution by State")
+    selected_states = st.multiselect("Select State(s)", df["State"].unique(), default=df["State"].unique())
+    filtered = df[df["State"].isin(selected_states)]
+    fig = px.histogram(filtered, x="State", color="Lead Tier", barmode="group")
     st.plotly_chart(fig, use_container_width=True)
 
-# === TAB 2: Lead Tier vs Income Bracket ===
+# === 2. Lead Tier vs Income Bracket ===
 with tab2:
+    st.subheader("Lead Tier by Income Bracket")
     fig = px.histogram(df, x="Income Bracket", color="Lead Tier", barmode="group")
     st.plotly_chart(fig, use_container_width=True)
 
-# === TAB 3: Lead Tier vs Age Group ===
+# === 3. Lead Tier vs Age Group ===
 with tab3:
-    selected_age_groups = st.multiselect("Select Age Group", df["Age Group"].unique(), default=df["Age Group"].unique())
-    filtered_age_df = df[df["Age Group"].isin(selected_age_groups)]
-    fig = px.histogram(filtered_age_df, x="Age Group", color="Lead Tier", barmode="group")
+    st.subheader("Lead Tier by Age Group")
+    selected_ages = st.multiselect("Select Age Group(s)", df["Age Group"].unique(), default=df["Age Group"].unique())
+    filtered_age = df[df["Age Group"].isin(selected_ages)]
+    fig = px.histogram(filtered_age, x="Age Group", color="Lead Tier", barmode="group")
     st.plotly_chart(fig, use_container_width=True)
 
-# === TAB 4: Lead Tier vs Gender (filtered by Employment Status) ===
+# === 4. Lead Tier vs Gender (filter by Employment Status) ===
 with tab4:
-    selected_employment = st.selectbox("Select Employment Status", df["Employment Status"].unique())
-    filtered_emp_df = df[df["Employment Status"] == selected_employment]
-    fig = px.histogram(filtered_emp_df, x="Gender", color="Lead Tier", barmode="group")
+    st.subheader("Lead Tier by Gender")
+    selected_emp = st.selectbox("Employment Status", df["Employment Status"].unique())
+    filtered_emp = df[df["Employment Status"] == selected_emp]
+    fig = px.histogram(filtered_emp, x="Gender", color="Lead Tier", barmode="group")
     st.plotly_chart(fig, use_container_width=True)
 
-# === TAB 5: PTB Score vs Policy Purchased ===
+# === 5. PTB Score vs Policy Purchased ===
 with tab5:
+    st.subheader("PTB Score Distribution by Policy Purchase")
     fig = px.box(df, x="Policy Purchased", y="Behavior Score", color="Policy Purchased",
-                 labels={"Policy Purchased": "Policy Purchased (0/1)", "Behavior Score": "PTB Score"})
+                 labels={"Policy Purchased": "Policy Purchased (0 = No, 1 = Yes)", "Behavior Score": "PTB Score"})
     st.plotly_chart(fig, use_container_width=True)
-
