@@ -117,14 +117,13 @@ import pandas as pd
 import plotly.express as px
 from azure.cosmos import CosmosClient
 
-# === Load Input Data from Cosmos DB ===
+# === Load Data from Cosmos DB ===
 @st.cache_data
-def load_input_data():
+def load_cosmos_data(container_name):
     try:
         endpoint = st.secrets["COSMOS_ENDPOINT"]
         key = st.secrets["COSMOS_KEY"]
         database_name = st.secrets["DATABASE_NAME"]
-        container_name = st.secrets["INPUT_CONTAINER"]
 
         client = CosmosClient(endpoint, credential=key)
         db = client.get_database_client(database_name)
@@ -133,30 +132,21 @@ def load_input_data():
         return pd.DataFrame(items)
 
     except Exception as e:
-        st.error(f"\u274c Failed to fetch data from Cosmos DB: {e}")
+        st.error(f"\u274c Failed to fetch data from Cosmos DB container '{container_name}': {e}")
         return pd.DataFrame()
 
-# === Load Output File Locally ===
-@st.cache_data
-def load_output_file():
-    try:
-        return pd.read_excel("model_predictions.xlsx")  # Update this path if needed
-    except Exception as e:
-        st.error(f"\u274c Failed to load output file: {e}")
-        return pd.DataFrame()
-
-# === Merge Input and Output on Name ===
-input_df = load_input_data()
-output_df = load_output_file()
+# === Load Input and Output from Separate Containers ===
+input_df = load_cosmos_data(st.secrets["INPUT_CONTAINER"])
+output_df = load_cosmos_data(st.secrets["OUTPUT_CONTAINER"])
 
 if input_df.empty or output_df.empty:
     st.stop()
 
-# Merge using customer Name
+# === Merge Input and Output on Name ===
 try:
     df = pd.merge(input_df, output_df, on="Name", how="inner")
 except Exception as e:
-    st.error(f"\u274c Failed to merge data: {e}")
+    st.error(f"\u274c Failed to merge data on 'Name': {e}")
     st.stop()
 
 # === KPI METRICS ===
