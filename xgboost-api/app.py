@@ -117,14 +117,14 @@ import pandas as pd
 import plotly.express as px
 from azure.cosmos import CosmosClient
 
-# === Load Data from Cosmos DB ===
+# === Load Input Data from Cosmos DB ===
 @st.cache_data
-def load_data():
+def load_input_data():
     try:
         endpoint = st.secrets["COSMOS_ENDPOINT"]
         key = st.secrets["COSMOS_KEY"]
         database_name = st.secrets["DATABASE_NAME"]
-        container_name = st.secrets["OUTPUT_CONTAINER"]
+        container_name = st.secrets["INPUT_CONTAINER"]
 
         client = CosmosClient(endpoint, credential=key)
         db = client.get_database_client(database_name)
@@ -136,9 +136,27 @@ def load_data():
         st.error(f"\u274c Failed to fetch data from Cosmos DB: {e}")
         return pd.DataFrame()
 
-# === Load & Preprocess ===
-df = load_data()
-if df.empty:
+# === Load Output File Locally ===
+@st.cache_data
+def load_output_file():
+    try:
+        return pd.read_excel("model_predictions.xlsx")  # Update this path if needed
+    except Exception as e:
+        st.error(f"\u274c Failed to load output file: {e}")
+        return pd.DataFrame()
+
+# === Merge Input and Output on Name ===
+input_df = load_input_data()
+output_df = load_output_file()
+
+if input_df.empty or output_df.empty:
+    st.stop()
+
+# Merge using customer Name
+try:
+    df = pd.merge(input_df, output_df, on="Name", how="inner")
+except Exception as e:
+    st.error(f"\u274c Failed to merge data: {e}")
     st.stop()
 
 # === KPI METRICS ===
@@ -194,6 +212,6 @@ with tab4:
 # === 5. PTB Score vs Policy Purchased ===
 with tab5:
     st.subheader("PTB Score Distribution by Policy Purchase")
-    fig = px.box(df, x="Policy Purchased", y="Behavior Score", color="Policy Purchased",
-                 labels={"Policy Purchased": "Policy Purchased (0 = No, 1 = Yes)", "Behavior Score": "PTB Score"})
+    fig = px.box(df, x="Policy Purchased", y="PTB Score", color="Policy Purchased",
+                 labels={"Policy Purchased": "Policy Purchased (0 = No, 1 = Yes)", "PTB Score": "PTB Score"})
     st.plotly_chart(fig, use_container_width=True)
