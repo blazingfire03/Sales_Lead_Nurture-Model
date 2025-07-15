@@ -133,7 +133,7 @@ def load_data():
         return pd.DataFrame(items)
 
     except Exception as e:
-        st.error(f"❌ Failed to fetch data from Cosmos DB: {e}")
+        st.error(f"\u274c Failed to fetch data from Cosmos DB: {e}")
         return pd.DataFrame()
 
 # === Load & Preprocess ===
@@ -142,7 +142,7 @@ if df.empty:
     st.stop()
 
 # === KPI METRICS ===
-st.title("📈 Sales Lead Nurture Dashboard")
+st.title("\ud83d\udcc8 Sales Lead Nurture Dashboard")
 
 col1, col2, col3 = st.columns(3)
 col1.metric("Total Leads", f"{len(df)}")
