@@ -115,13 +115,26 @@ else:
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from azure.cosmos import CosmosClient
 
 st.set_page_config(page_title="Lead Conversion Dashboard", layout="wide")
 
-# Auto-refresh every 60 seconds
+# === Load data from Cosmos DB ===
 @st.cache_data(ttl=60)
 def load_data():
-    return pd.read_csv("scored_leads.csv")
+    endpoint = st.secrets["COSMOS_ENDPOINT"]
+    key = st.secrets["COSMOS_KEY"]
+    database_name = st.secrets["DATABASE_NAME"]
+    container_name = st.secrets["OUTPUT_CONTAINER"]
+
+    client = CosmosClient(endpoint, credential=key)
+    db = client.get_database_client(database_name)
+    container = db.get_container_client(container_name)
+
+    items = list(container.read_all_items())
+    df = pd.DataFrame(items)
+
+    return df
 
 df = load_data()
 
@@ -131,7 +144,7 @@ policies_purchased = df["Policy Purchased"].sum()
 conversion_rate = (policies_purchased / total_leads) * 100
 
 st.title("📊 Lead Conversion Dashboard")
-st.markdown("This dashboard refreshes automatically every 60 seconds.")
+st.markdown("Live dashboard powered by Cosmos DB. Auto-refreshes every 60 seconds.")
 
 col1, col2, col3 = st.columns(3)
 col1.metric("Total Leads", f"{total_leads}")
