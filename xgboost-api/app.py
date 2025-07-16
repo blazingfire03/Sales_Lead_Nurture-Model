@@ -3,7 +3,7 @@ import pandas as pd
 import joblib
 import uuid
 import os
-from azure.cosmos import CosmosClient, PartitionKey, exceptions
+from azure.cosmos import CosmosClient, PartitionKey
 
 # === Load Model ===
 @st.cache_resource
@@ -13,36 +13,56 @@ def load_model():
 
 model = load_model()
 
-# === Load Data from Cosmos DB ===
+# === Load Input Data ===
 @st.cache_data
 def fetch_data():
     try:
         endpoint = st.secrets["COSMOS_ENDPOINT"]
         key = st.secrets["COSMOS_KEY"]
-        database_name = st.secrets["DATABASE_NAME"]
+        db_name = st.secrets["DATABASE_NAME"]
         container_name = st.secrets["INPUT_CONTAINER"]
 
         client = CosmosClient(endpoint, credential=key)
-        db = client.get_database_client(database_name)
+        db = client.get_database_client(db_name)
         container = db.get_container_client(container_name)
         items = list(container.read_all_items())
         return pd.DataFrame(items)
 
     except Exception as e:
-        st.error(f"❌ Failed to fetch data from Cosmos DB: {e}")
+        st.error(f"❌ Failed to fetch input data: {e}")
         return pd.DataFrame()
 
-# === Upload Scored Data to Cosmos DB ===
+# === Clear Output Container ===
+def clear_output_container():
+    try:
+        endpoint = st.secrets["COSMOS_ENDPOINT"]
+        key = st.secrets["COSMOS_KEY"]
+        db_name = st.secrets["DATABASE_NAME"]
+        output_container = st.secrets["OUTPUT_CONTAINER"]
+
+        client = CosmosClient(endpoint, credential=key)
+        db = client.get_database_client(db_name)
+        container = db.get_container_client(output_container)
+
+        items = list(container.read_all_items())
+        for item in items:
+            container.delete_item(item=item["id"], partition_key=item["id"])
+
+        st.info(f"🧹 Cleared {len(items)} records from '{output_container}'.")
+
+    except Exception as e:
+        st.error(f"❌ Failed to clear output container: {e}")
+
+# === Upload New Scored Leads ===
 def upload_results(df):
     try:
         endpoint = st.secrets["COSMOS_ENDPOINT"]
         key = st.secrets["COSMOS_KEY"]
-        database_name = st.secrets["DATABASE_NAME"]
+        db_name = st.secrets["DATABASE_NAME"]
         output_container = st.secrets["OUTPUT_CONTAINER"]
 
         client = CosmosClient(endpoint, credential=key)
-        db = client.get_database_client(database_name)
-
+        db = client.get_database_client(db_name)
         container = db.create_container_if_not_exists(
             id=output_container,
             partition_key=PartitionKey(path="/id"),
@@ -54,39 +74,39 @@ def upload_results(df):
             record["id"] = str(uuid.uuid4())
             container.upsert_item(record)
 
-        st.success(f"✅ Uploaded {len(df)} scored leads to Cosmos DB → '{output_container}'.")
+        st.success(f"✅ Uploaded {len(df)} leads to '{output_container}'.")
 
     except Exception as e:
-        st.error(f"❌ Failed to upload to Cosmos DB: {e}")
+        st.error(f"❌ Upload failed: {e}")
 
 # === App UI ===
-st.title("🧠 PTB Score Predictor with Azure Auto Sync")
+st.title("🧠 PTB Score Predictor + Cosmos DB Dashboard")
 
-with st.spinner("Fetching customer data from Cosmos DB..."):
+with st.spinner("Loading input data from Cosmos DB..."):
     df = fetch_data()
 
 if df.empty:
-    st.warning("⚠️ No data found in Azure Cosmos DB.")
+    st.warning("⚠️ No input data found.")
 else:
-    st.subheader("📄 Input Data (Preview)")
+    st.subheader("📄 Input Data")
     st.dataframe(df.head())
 
-    # Required columns
-    required_features = [
+    # Required features
+    required = [
         'Age', 'Gender', 'Annual Income', 'Income Bracket', 'Marital Status',
         'Employment Status', 'Region', 'Urban/Rural Flag', 'State', 'ZIP Code',
         'Plan Preference Type', 'Web Form Completion Rate', 'Quote Requested',
         'Application Started', 'Behavior Score', 'Application Submitted', 'Application Applied'
     ]
 
-    missing_features = [col for col in required_features if col not in df.columns]
-    if missing_features:
-        st.error(f"❌ Missing required features in data: {missing_features}")
+    missing = [col for col in required if col not in df.columns]
+    if missing:
+        st.error(f"❌ Missing columns: {missing}")
     else:
         try:
-            input_df = df[required_features]
+            input_df = df[required]
             proba = model.predict_proba(input_df)[:, 1]
-            df['PTB_Score'] = proba * 100  # convert to percentage
+            df["PTB_Score"] = proba * 100
 
             def tier(score):
                 if score >= 90:
@@ -98,100 +118,88 @@ else:
                 else:
                     return "Bronze"
 
-            df['Lead_Tier'] = df['PTB_Score'].apply(tier)
+            df["Lead_Tier"] = df["PTB_Score"].apply(tier)
 
             st.subheader("✅ Scored Results")
-            st.dataframe(df[['PTB_Score', 'Lead_Tier']].join(df.drop(columns=['PTB_Score', 'Lead_Tier'])))
+            st.dataframe(df[["PTB_Score", "Lead_Tier"]].join(df.drop(columns=["PTB_Score", "Lead_Tier"])))
 
-            csv = df.to_csv(index=False).encode('utf-8')
-            st.download_button("⬇️ Download CSV", csv, "scored_leads.csv", "text/csv")
-
-            if st.button("🚀 Upload to Cosmos DB"):
+            if st.button("🚀 Clear & Upload to Cosmos DB"):
+                clear_output_container()
                 upload_results(df)
 
         except Exception as e:
-            st.error(f"❌ Prediction failed: {e}")
+            st.error(f"❌ Scoring failed: {e}")
 
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-from azure.cosmos import CosmosClient
+# === DASHBOARD SECTION ===
+st.markdown("---")
+st.header("📊 Lead Conversion Dashboard")
 
-st.set_page_config(page_title="Lead Conversion Dashboard", layout="wide")
-
-# === Load data from Cosmos DB ===
 @st.cache_data
-def load_data():
+def load_dashboard_data():
     endpoint = st.secrets["COSMOS_ENDPOINT"]
     key = st.secrets["COSMOS_KEY"]
-    database_name = st.secrets["DATABASE_NAME"]
-    container_name = st.secrets["OUTPUT_CONTAINER"]
+    db_name = st.secrets["DATABASE_NAME"]
+    output_container = st.secrets["OUTPUT_CONTAINER"]
 
     client = CosmosClient(endpoint, credential=key)
-    db = client.get_database_client(database_name)
-    container = db.get_container_client(container_name)
+    db = client.get_database_client(db_name)
+    container = db.get_container_client(output_container)
 
     items = list(container.read_all_items())
-    df = pd.DataFrame(items)
+    return pd.DataFrame(items)
 
-    return df
+dash_df = load_dashboard_data()
 
-df = load_data()
+if not dash_df.empty:
+    total = len(dash_df)
+    purchased = dash_df["Policy Purchased"].sum()
+    rate = (purchased / total) * 100
 
-# === Metrics ===
-total_leads = len(df)
-policies_purchased = df["Policy Purchased"].sum()
-conversion_rate = (policies_purchased / total_leads) * 100
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Total Leads", total)
+    c2.metric("Policies Purchased", int(purchased))
+    c3.metric("Conversion Rate", f"{rate:.2f}%")
 
-st.title("📊 Lead Conversion Dashboard")
-st.markdown("Live dashboard powered by Cosmos DB.")
+    st.divider()
 
-col1, col2, col3 = st.columns(3)
-col1.metric("Total Leads", f"{total_leads}")
-col2.metric("Policies Purchased", f"{int(policies_purchased)}")
-col3.metric("Conversion Rate", f"{conversion_rate:.2f}%")
+    import plotly.express as px
 
-st.divider()
+    # Chart 1: Lead Tier vs State
+    st.subheader("1️⃣ Lead Tier by State")
+    states = st.multiselect("Filter by State:", dash_df["State"].dropna().unique())
+    filtered1 = dash_df[dash_df["State"].isin(states)] if states else dash_df
+    fig1 = px.histogram(filtered1, x="State", color="Lead_Tier", barmode="group")
+    st.plotly_chart(fig1, use_container_width=True)
 
-# === 1. Lead Tier vs State ===
-st.subheader("1️⃣ Lead Tier Distribution by State")
-states = st.multiselect("Filter by State:", options=df["State"].unique())
-df1 = df[df["State"].isin(states)] if states else df
-fig1 = px.histogram(df1, x="State", color="Lead_Tier", barmode="group", title="Lead Tier by State")
-st.plotly_chart(fig1, use_container_width=True)
+    # Chart 2: Lead Tier vs Income Bracket
+    st.subheader("2️⃣ Lead Tier by Income Bracket")
+    fig2 = px.histogram(dash_df, x="Income Bracket", color="Lead_Tier", barmode="stack")
+    st.plotly_chart(fig2, use_container_width=True)
 
-# === 2. Lead Tier vs Income Bracket ===
-st.subheader("2️⃣ Lead Tier vs Income Bracket")
-fig2 = px.histogram(df, x="Income Bracket", color="Lead_Tier", barmode="stack", title="Lead Tier by Income Bracket")
-st.plotly_chart(fig2, use_container_width=True)
+    # Chart 3: Lead Tier vs Age Group
+    st.subheader("3️⃣ Lead Tier by Age Group")
+    ages = st.multiselect("Filter by Age Group:", dash_df["Age Group"].dropna().unique())
+    filtered3 = dash_df[dash_df["Age Group"].isin(ages)] if ages else dash_df
+    fig3 = px.histogram(filtered3, x="Age Group", color="Lead_Tier", barmode="group")
+    st.plotly_chart(fig3, use_container_width=True)
 
-# === 3. Lead Tier vs Age Group ===
-st.subheader("3️⃣ Lead Tier vs Age Group")
-age_groups = st.multiselect("Filter by Age Group:", options=df["Age Group"].unique())
-df3 = df[df["Age Group"].isin(age_groups)] if age_groups else df
-fig3 = px.histogram(df3, x="Age Group", color="Lead_Tier", barmode="group", title="Lead Tier by Age Group")
-st.plotly_chart(fig3, use_container_width=True)
+    # Chart 4: Lead Tier vs Gender filtered by Employment
+    st.subheader("4️⃣ Lead Tier by Gender (Filtered by Employment)")
+    jobs = ["All"] + dash_df["Employment Status"].dropna().unique().tolist()
+    emp_filter = st.selectbox("Employment Status:", jobs)
+    filtered4 = dash_df if emp_filter == "All" else dash_df[dash_df["Employment Status"] == emp_filter]
+    fig4 = px.histogram(filtered4, x="Gender", color="Lead_Tier", barmode="group")
+    st.plotly_chart(fig4, use_container_width=True)
 
-# === 4. Lead Tier vs Gender (filtered by Employment Status) ===
-st.subheader("4️⃣ Lead Tier vs Gender (Filtered by Employment Status)")
-employment_status = st.selectbox("Select Employment Status:", options=["All"] + df["Employment Status"].unique().tolist())
-df4 = df if employment_status == "All" else df[df["Employment Status"] == employment_status]
-fig4 = px.histogram(df4, x="Gender", color="Lead_Tier", barmode="group", title="Lead Tier by Gender")
-st.plotly_chart(fig4, use_container_width=True)
+    # Chart 5: PTB Score vs Purchase Channel (filter: Quote Requested)
+    st.subheader("5️⃣ PTB Score vs Purchase Channel")
+    quote_col = "Quote Requested (website)" if "Quote Requested (website)" in dash_df.columns else "Quote Requested"
+    quote_values = dash_df[quote_col].dropna().unique().tolist()
+    selected = st.multiselect("Filter by Quote Requested:", quote_values, default=quote_values)
 
-# === 5. PTB Score vs Purchase Channel (Filtered by Quote Requested) ===
-st.subheader("5️⃣ PTB Score vs Purchase Channel (Filter: Quote Requested)")
+    filtered5 = dash_df[dash_df[quote_col].isin(selected)]
+    fig5 = px.box(filtered5, x="Purchase Channel", y="PTB_Score", color="Purchase Channel")
+    st.plotly_chart(fig5, use_container_width=True)
 
-quote_column = "Quote Requested (website)" if "Quote Requested (website)" in df.columns else "Quote Requested"
-quote_filter_values = df[quote_column].dropna().unique().tolist()
-selected_quotes = st.multiselect("Filter by Quote Requested:", quote_filter_values, default=quote_filter_values)
-
-df5 = df[df[quote_column].isin(selected_quotes)]
-fig5 = px.box(
-    df5,
-    x="Purchase Channel",
-    y="PTB_Score",
-    color="Purchase Channel",
-    title="PTB Score by Purchase Channel"
-)
-st.plotly_chart(fig5, use_container_width=True)
+else:
+    st.warning("⚠️ No scored data found in output container.")
