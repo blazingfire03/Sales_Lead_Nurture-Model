@@ -179,25 +179,16 @@ if not dash_df.empty:
     # === Display KPIs in two rows ===
     st.subheader("📈 Key Funnel Metrics")
 
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Total Leads", total)
-    c2.metric("Policies Purchased", int(purchased))
-    c3.metric("Conversion Rate", f"{rate:.2f}%")
+    k1, k2, k3 = st.columns(3)
+    k1.metric("Total Leads", total)
+    k2.metric("Policies Purchased", int(purchased))
+    k3.metric("Conversion Rate", f"{rate:.2f}%")
 
-    c4, c5, c6, c7 = st.columns(4)
-    c4.metric("Quote Requested Rate", f"{quote_rate:.2f}%")
-    c5.metric("App Started Rate", f"{app_started_rate:.2f}%")
-    c6.metric("App Submitted Rate", f"{app_submitted_rate:.2f}%")
-    c7.metric("Submitted → Policy Conversion", f"{submitted_to_purchased:.2f}%")
-    
-    total = len(dash_df)
-    purchased = dash_df["Policy Purchased"].sum()
-    rate = (purchased / total) * 100
-
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Total Leads", total)
-    c2.metric("Policies Purchased", int(purchased))
-    c3.metric("Conversion Rate", f"{rate:.2f}%")
+    k4, k5, k6, k7 = st.columns(4)
+    k4.metric("Quote Requested Rate", f"{quote_rate:.2f}%")
+    k5.metric("App Started Rate", f"{app_started_rate:.2f}%")
+    k6.metric("App Submitted Rate", f"{app_submitted_rate:.2f}%")
+    k7.metric("Submitted → Policy Conversion", f"{submitted_to_purchased:.2f}%")
 
     st.divider()
 
@@ -230,28 +221,24 @@ if not dash_df.empty:
     fig4 = px.histogram(filtered4, x="Gender", color="Lead_Tier", barmode="group")
     st.plotly_chart(fig4, use_container_width=True)
 
-            # Chart 5: Quote Requested vs Purchase Channel (Filtered by Gender, Income Bracket, Quote Requested)
+    # Chart 5: Quote Requested vs Purchase Channel (Filtered by Gender, Income Bracket, Quote Requested)
     st.subheader("5️⃣ Quote Requested vs Purchase Channel")
 
-    # Filter options
     gender_options = dash_df["Gender"].dropna().unique().tolist()
     selected_genders = st.multiselect("Filter by Gender:", gender_options, default=gender_options)
 
     income_options = dash_df["Income Bracket"].dropna().unique().tolist()
     selected_incomes = st.multiselect("Filter by Income Bracket:", income_options, default=income_options)
 
-    quote_col = "Quote Requested (website)" if "Quote Requested (website)" in dash_df.columns else "Quote Requested"
     quote_options = dash_df[quote_col].dropna().unique().tolist()
     selected_quotes = st.multiselect("Filter by Quote Requested:", quote_options, default=quote_options)
 
-    # Apply all filters
     filtered5 = dash_df[
         (dash_df["Gender"].isin(selected_genders)) &
         (dash_df["Income Bracket"].isin(selected_incomes)) &
         (dash_df[quote_col].isin(selected_quotes))
     ]
 
-    # Draw grouped bar chart
     fig5 = px.histogram(
         filtered5,
         x="Purchase Channel",
