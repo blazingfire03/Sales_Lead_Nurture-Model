@@ -191,22 +191,28 @@ if not dash_df.empty:
     fig4 = px.histogram(filtered4, x="Gender", color="Lead_Tier", barmode="group")
     st.plotly_chart(fig4, use_container_width=True)
 
-        # Chart 5: Quote Requested vs Purchase Channel (Filtered by Gender and Income Bracket)
+            # Chart 5: Quote Requested vs Purchase Channel (Filtered by Gender, Income Bracket, Quote Requested)
     st.subheader("5️⃣ Quote Requested vs Purchase Channel")
 
+    # Filter options
     gender_options = dash_df["Gender"].dropna().unique().tolist()
     selected_genders = st.multiselect("Filter by Gender:", gender_options, default=gender_options)
 
     income_options = dash_df["Income Bracket"].dropna().unique().tolist()
-    selected_income = st.multiselect("Filter by Income Bracket:", income_options, default=income_options)
-
-    filtered5 = dash_df[
-        (dash_df["Gender"].isin(selected_genders)) &
-        (dash_df["Income Bracket"].isin(selected_income))
-    ]
+    selected_incomes = st.multiselect("Filter by Income Bracket:", income_options, default=income_options)
 
     quote_col = "Quote Requested (website)" if "Quote Requested (website)" in dash_df.columns else "Quote Requested"
-    
+    quote_options = dash_df[quote_col].dropna().unique().tolist()
+    selected_quotes = st.multiselect("Filter by Quote Requested:", quote_options, default=quote_options)
+
+    # Apply all filters
+    filtered5 = dash_df[
+        (dash_df["Gender"].isin(selected_genders)) &
+        (dash_df["Income Bracket"].isin(selected_incomes)) &
+        (dash_df[quote_col].isin(selected_quotes))
+    ]
+
+    # Draw grouped bar chart
     fig5 = px.histogram(
         filtered5,
         x="Purchase Channel",
