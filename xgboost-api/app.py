@@ -120,7 +120,7 @@ from azure.cosmos import CosmosClient
 st.set_page_config(page_title="Lead Conversion Dashboard", layout="wide")
 
 # === Load data from Cosmos DB ===
-@st.cache_data(ttl=60)
+@st.cache_data
 def load_data():
     endpoint = st.secrets["COSMOS_ENDPOINT"]
     key = st.secrets["COSMOS_KEY"]
@@ -144,7 +144,7 @@ policies_purchased = df["Policy Purchased"].sum()
 conversion_rate = (policies_purchased / total_leads) * 100
 
 st.title("📊 Lead Conversion Dashboard")
-st.markdown("Live dashboard powered by Cosmos DB. Auto-refreshes every 60 seconds.")
+st.markdown("Live dashboard powered by Cosmos DB.")
 
 col1, col2, col3 = st.columns(3)
 col1.metric("Total Leads", f"{total_leads}")
