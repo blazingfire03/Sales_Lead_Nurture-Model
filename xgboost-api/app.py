@@ -115,93 +115,64 @@ else:
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from azure.cosmos import CosmosClient
 
-# === Load Data from Cosmos DB ===
-@st.cache_data
-def load_cosmos_data(container_name):
-    try:
-        endpoint = st.secrets["COSMOS_ENDPOINT"]
-        key = st.secrets["COSMOS_KEY"]
-        database_name = st.secrets["DATABASE_NAME"]
+st.set_page_config(page_title="Lead Conversion Dashboard", layout="wide")
 
-        client = CosmosClient(endpoint, credential=key)
-        db = client.get_database_client(database_name)
-        container = db.get_container_client(container_name)
-        items = list(container.read_all_items())
-        return pd.DataFrame(items)
+# Auto-refresh every 60 seconds
+@st.cache_data(ttl=60)
+def load_data():
+    return pd.read_csv("scored_leads.csv")
 
-    except Exception as e:
-        st.error(f"\u274c Failed to fetch data from Cosmos DB container '{container_name}': {e}")
-        return pd.DataFrame()
+df = load_data()
 
-# === Load Input and Output from Separate Containers ===
-input_df = load_cosmos_data(st.secrets["INPUT_CONTAINER"])
-output_df = load_cosmos_data(st.secrets["OUTPUT_CONTAINER"])
+# === Metrics ===
+total_leads = len(df)
+policies_purchased = df["Policy Purchased"].sum()
+conversion_rate = (policies_purchased / total_leads) * 100
 
-if input_df.empty or output_df.empty:
-    st.stop()
-
-# === Merge Input and Output on Name ===
-try:
-    df = pd.merge(input_df, output_df, on="Name", how="inner")
-except Exception as e:
-    st.error(f"\u274c Failed to merge data on 'Name': {e}")
-    st.stop()
-
-# === KPI METRICS ===
-st.title("\ud83d\udcc8 Sales Lead Nurture Dashboard")
+st.title("📊 Lead Conversion Dashboard")
+st.markdown("This dashboard refreshes automatically every 60 seconds.")
 
 col1, col2, col3 = st.columns(3)
-col1.metric("Total Leads", f"{len(df)}")
-col2.metric("Policies Purchased", f"{df['Policy Purchased'].sum()}")
-conversion_rate = (df['Policy Purchased'].sum() / len(df)) * 100
+col1.metric("Total Leads", f"{total_leads}")
+col2.metric("Policies Purchased", f"{int(policies_purchased)}")
 col3.metric("Conversion Rate", f"{conversion_rate:.2f}%")
 
-st.markdown("---")
-
-# === CHARTS IN TABS ===
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "Lead Tier vs State",
-    "Lead Tier vs Income Bracket",
-    "Lead Tier vs Age Group",
-    "Lead Tier vs Gender",
-    "PTB Score vs Policy Purchased"
-])
+st.divider()
 
 # === 1. Lead Tier vs State ===
-with tab1:
-    st.subheader("Lead Tier Distribution by State")
-    selected_states = st.multiselect("Select State(s)", df["State"].unique(), default=df["State"].unique())
-    filtered = df[df["State"].isin(selected_states)]
-    fig = px.histogram(filtered, x="State", color="Lead Tier", barmode="group")
-    st.plotly_chart(fig, use_container_width=True)
+st.subheader("1️⃣ Lead Tier Distribution by State")
+states = st.multiselect("Filter by State:", options=df["State"].unique())
+df1 = df[df["State"].isin(states)] if states else df
+fig1 = px.histogram(df1, x="State", color="Lead_Tier", barmode="group", title="Lead Tier by State")
+st.plotly_chart(fig1, use_container_width=True)
 
 # === 2. Lead Tier vs Income Bracket ===
-with tab2:
-    st.subheader("Lead Tier by Income Bracket")
-    fig = px.histogram(df, x="Income Bracket", color="Lead Tier", barmode="group")
-    st.plotly_chart(fig, use_container_width=True)
+st.subheader("2️⃣ Lead Tier vs Income Bracket")
+fig2 = px.histogram(df, x="Income Bracket", color="Lead_Tier", barmode="stack", title="Lead Tier by Income Bracket")
+st.plotly_chart(fig2, use_container_width=True)
 
 # === 3. Lead Tier vs Age Group ===
-with tab3:
-    st.subheader("Lead Tier by Age Group")
-    selected_ages = st.multiselect("Select Age Group(s)", df["Age Group"].unique(), default=df["Age Group"].unique())
-    filtered_age = df[df["Age Group"].isin(selected_ages)]
-    fig = px.histogram(filtered_age, x="Age Group", color="Lead Tier", barmode="group")
-    st.plotly_chart(fig, use_container_width=True)
+st.subheader("3️⃣ Lead Tier vs Age Group")
+age_groups = st.multiselect("Filter by Age Group:", options=df["Age Group"].unique())
+df3 = df[df["Age Group"].isin(age_groups)] if age_groups else df
+fig3 = px.histogram(df3, x="Age Group", color="Lead_Tier", barmode="group", title="Lead Tier by Age Group")
+st.plotly_chart(fig3, use_container_width=True)
 
-# === 4. Lead Tier vs Gender (filter by Employment Status) ===
-with tab4:
-    st.subheader("Lead Tier by Gender")
-    selected_emp = st.selectbox("Employment Status", df["Employment Status"].unique())
-    filtered_emp = df[df["Employment Status"] == selected_emp]
-    fig = px.histogram(filtered_emp, x="Gender", color="Lead Tier", barmode="group")
-    st.plotly_chart(fig, use_container_width=True)
+# === 4. Lead Tier vs Gender (filtered by Employment Status) ===
+st.subheader("4️⃣ Lead Tier vs Gender (Filtered by Employment Status)")
+employment_status = st.selectbox("Select Employment Status:", options=["All"] + df["Employment Status"].unique().tolist())
+df4 = df if employment_status == "All" else df[df["Employment Status"] == employment_status]
+fig4 = px.histogram(df4, x="Gender", color="Lead_Tier", barmode="group", title="Lead Tier by Gender")
+st.plotly_chart(fig4, use_container_width=True)
 
 # === 5. PTB Score vs Policy Purchased ===
-with tab5:
-    st.subheader("PTB Score Distribution by Policy Purchase")
-    fig = px.box(df, x="Policy Purchased", y="PTB Score", color="Policy Purchased",
-                 labels={"Policy Purchased": "Policy Purchased (0 = No, 1 = Yes)", "PTB Score": "PTB Score"})
-    st.plotly_chart(fig, use_container_width=True)
+st.subheader("5️⃣ PTB Score vs Policy Purchased")
+fig5 = px.box(
+    df,
+    y="PTB_Score",
+    color=df["Policy Purchased"].astype(str),
+    labels={"Policy Purchased": "Policy Purchased"},
+    title="PTB Score Distribution by Purchase Outcome"
+)
+st.plotly_chart(fig5, use_container_width=True)
