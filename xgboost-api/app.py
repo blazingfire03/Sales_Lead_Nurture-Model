@@ -155,6 +155,45 @@ if not dash_df.empty:
     purchased = dash_df["Policy Purchased"].sum()
     rate = (purchased / total) * 100
 
+    # Quote Requested Rate
+    quote_col = "Quote Requested (website)" if "Quote Requested (website)" in dash_df.columns else "Quote Requested"
+    quote_requested = dash_df[quote_col].isin(["1", 1, "Yes", True]).sum()
+    quote_rate = (quote_requested / total) * 100
+
+    # Application Started Rate
+    app_started = dash_df["Application Started"].isin(["1", 1, "Yes", True]).sum()
+    app_started_rate = (app_started / total) * 100
+
+    # Application Submitted Rate
+    app_submitted = dash_df["Application Submitted"].isin(["1", 1, "Yes", True]).sum()
+    app_submitted_rate = (app_submitted / total) * 100
+
+    # Policy Conversion from Submitted Applications
+    submitted_df = dash_df[dash_df["Application Submitted"].isin(["1", 1, "Yes", True])]
+    submitted_count = len(submitted_df)
+    submitted_to_purchased = (
+        submitted_df["Policy Purchased"].sum() / submitted_count * 100
+        if submitted_count > 0 else 0
+    )
+
+    # === Display KPIs in two rows ===
+    st.subheader("📈 Key Funnel Metrics")
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Total Leads", total)
+    c2.metric("Policies Purchased", int(purchased))
+    c3.metric("Conversion Rate", f"{rate:.2f}%")
+
+    c4, c5, c6, c7 = st.columns(4)
+    c4.metric("Quote Requested Rate", f"{quote_rate:.2f}%")
+    c5.metric("App Started Rate", f"{app_started_rate:.2f}%")
+    c6.metric("App Submitted Rate", f"{app_submitted_rate:.2f}%")
+    c7.metric("Submitted → Policy Conversion", f"{submitted_to_purchased:.2f}%")
+    
+    total = len(dash_df)
+    purchased = dash_df["Policy Purchased"].sum()
+    rate = (purchased / total) * 100
+
     c1, c2, c3 = st.columns(3)
     c1.metric("Total Leads", total)
     c2.metric("Policies Purchased", int(purchased))
