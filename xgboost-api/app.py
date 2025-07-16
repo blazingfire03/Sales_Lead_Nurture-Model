@@ -179,13 +179,19 @@ df4 = df if employment_status == "All" else df[df["Employment Status"] == employ
 fig4 = px.histogram(df4, x="Gender", color="Lead_Tier", barmode="group", title="Lead Tier by Gender")
 st.plotly_chart(fig4, use_container_width=True)
 
-# === 5. PTB Score vs Policy Purchased ===
-st.subheader("5️⃣ PTB Score vs Policy Purchased")
+# === 5. PTB Score vs Purchase Channel (Filtered by Quote Requested) ===
+st.subheader("5️⃣ PTB Score vs Purchase Channel (Filter: Quote Requested)")
+
+quote_column = "Quote Requested (website)" if "Quote Requested (website)" in df.columns else "Quote Requested"
+quote_filter_values = df[quote_column].dropna().unique().tolist()
+selected_quotes = st.multiselect("Filter by Quote Requested:", quote_filter_values, default=quote_filter_values)
+
+df5 = df[df[quote_column].isin(selected_quotes)]
 fig5 = px.box(
-    df,
+    df5,
+    x="Purchase Channel",
     y="PTB_Score",
-    color=df["Policy Purchased"].astype(str),
-    labels={"Policy Purchased": "Policy Purchased"},
-    title="PTB Score Distribution by Purchase Outcome"
+    color="Purchase Channel",
+    title="PTB Score by Purchase Channel"
 )
 st.plotly_chart(fig5, use_container_width=True)
