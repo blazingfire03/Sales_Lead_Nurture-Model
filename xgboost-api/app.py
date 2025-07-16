@@ -190,6 +190,21 @@ if not dash_df.empty:
     k6.metric("App Submitted Rate", f"{app_submitted_rate:.2f}%")
     k7.metric("Submitted → Policy Conversion", f"{submitted_to_purchased:.2f}%")
 
+    st.markdown("### 🥇 Lead Tier Distribution")
+
+    tier_counts = dash_df["Lead_Tier"].value_counts().to_dict()
+
+    bronze_count = tier_counts.get("Bronze", 0)
+    silver_count = tier_counts.get("Silver", 0)
+    gold_count = tier_counts.get("Gold", 0)
+    platinum_count = tier_counts.get("Platinum", 0)
+
+    t1, t2, t3, t4 = st.columns(4)
+    t1.metric("🥉 Bronze", bronze_count)
+    t2.metric("🥈 Silver", silver_count)
+    t3.metric("🥇 Gold", gold_count)
+    t4.metric("🏆 Platinum", platinum_count)
+
     st.divider()
 
     import plotly.express as px
