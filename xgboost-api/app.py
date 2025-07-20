@@ -88,9 +88,9 @@ def load_dashboard_data():
     return pd.DataFrame(items)
 
 # === TABS ===
-tabs = st.tabs(["🏠 Overview", "🤖 S-core & Upload", "📊 KPIs", "📈 Charts", "📤 Export"])
+tabs = st.tabs(["🤖 S-core & Upload", "📊 KPIs", "📈 Charts", "📤 Export"])
 
-with tabs[1]:
+with tabs[0]:
     st.title("Sales Lead Nurture Model Dashboard")
     with st.spinner("Loading input data from Cosmos DB..."):
         df = fetch_data()
@@ -137,12 +137,10 @@ with tabs[1]:
                 clear_output_container()
                 upload_results(df)
 
-with tabs[2]:
-    st.title("📊 KPI Dashboard")
+with tabs[1]:
     dash_df = load_dashboard_data()
-    if dash_df.empty:
-        st.warning("⚠️ No scored data found in output container.")
-    else:
+    if not dash_df.empty:
+        st.title("📊 KPI Dashboard")
         st.markdown("**Key Funnel Metrics**")
 
         total = len(dash_df)
@@ -173,7 +171,7 @@ with tabs[2]:
             ("Quote Requested Rate", f"{quote_rate:.2f}%"),
             ("App Started Rate", f"{app_started_rate:.2f}%"),
             ("App Submitted Rate", f"{app_submitted_rate:.2f}%"),
-            ("Submitted → Policy Conversion", f"{submitted_to_purchased:.2f}%")
+            ("Submitted + Policy Conversion", f"{submitted_to_purchased:.2f}%")
         ]
 
         first_row = kpi_values[:4]
@@ -214,7 +212,7 @@ with tabs[2]:
 
         st.markdown(bar_html, unsafe_allow_html=True)
 
-with tabs[3]:
+with tabs[2]:
     st.title("📈 Charts Dashboard")
     dash_df = load_dashboard_data()
     if not dash_df.empty:
@@ -269,7 +267,7 @@ with tabs[3]:
     else:
         st.warning("⚠️ No scored data found in output container.")
 
-with tabs[4]:
+with tabs[3]:
     dash_df = load_dashboard_data()
     if not dash_df.empty:
         st.title("📤 Export Scored Data")
