@@ -112,8 +112,7 @@ else:
         df["Lead_Tier"] = df["PTB_Score"].apply(tier)
 
         st.subheader("✅ Scored Results")
-        df["PTB_Score"] = df["PTB_Score"].round(2)
-        st.dataframe(df)
+        st.dataframe(df["PTB_Score"].round(2).astype(str) + "%".astype(str).to_frame().join(df))
 
         if st.button("🚀 Clear & Upload to Cosmos DB"):
             clear_output_container()
@@ -199,7 +198,7 @@ if not dash_df.empty:
     for tier in ["Bronze", "Silver", "Gold", "Platinum"]:
         count = tier_counts.get(tier, 0)
         bar = f"<div style='background:{color_map.get(tier)};width:{min(count/total*100,100)}%;height:10px;border-radius:4px'></div>"
-        st.markdown(f"<div style='display:flex;justify-content:space-between'><b>{tier}</b><span>{count}</span></div>{bar}<br>", unsafe_allow_html=True)
+        st.markdown(f"<div style='display:flex;justify-content:space-between'><b>{tier}</b><b>{count}</b></div>{bar}<br>", unsafe_allow_html=True)
 
 else:
     st.warning("⚠️ No scored data found in output container.")
