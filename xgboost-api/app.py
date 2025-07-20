@@ -7,7 +7,7 @@ from PIL import Image
 from azure.cosmos import CosmosClient, PartitionKey
 import plotly.express as px
 
-st.set_page_config(page_title="PTB Score Dashboard", layout="wide")
+st.set_page_config(page_title="Sales Lead Nurture Model Dashboard", layout="wide")
 
 @st.cache_resource
 def load_model():
@@ -73,55 +73,55 @@ def upload_results(df):
 
     st.success(f"✅ Uploaded {len(df)} leads to '{output_container}'.")
 
-st.title("🧠 PTB Score Predictor + Cosmos DB Dashboard")
+# === TABS ===
+tabs = st.tabs(["🏠 Overview", "🤖 S-core & Upload", "📊 KPIs", "📈 Charts", "📤 Export"])
 
-with st.spinner("Loading input data from Cosmos DB..."):
-    df = fetch_data()
+with tabs[1]:
+    st.title("Sales Lead Nurture Model Dashboard")
+    with st.spinner("Loading input data from Cosmos DB..."):
+        df = fetch_data()
 
-if df.empty:
-    st.warning("⚠️ No input data found.")
-else:
-    st.subheader("📄 Input Data")
-    st.dataframe(df.head())
-
-    required = [
-        'Age', 'Gender', 'Annual Income', 'Income Bracket', 'Marital Status',
-        'Employment Status', 'Region', 'Urban/Rural Flag', 'State', 'ZIP Code',
-        'Plan Preference Type', 'Web Form Completion Rate', 'Quote Requested',
-        'Application Started', 'Behavior Score', 'Application Submitted', 'Application Applied'
-    ]
-
-    missing = [col for col in required if col not in df.columns]
-    if missing:
-        st.error(f"❌ Missing columns: {missing}")
+    if df.empty:
+        st.warning("⚠️ No input data found.")
     else:
-        input_df = df[required]
-        proba = model.predict_proba(input_df)[:, 1]
-        df["PTB_Score"] = proba * 100
+        st.subheader("📄 Input Data")
+        st.dataframe(df.head())
 
-        def tier(score):
-            if score >= 90:
-                return "Platinum"
-            elif score >= 75:
-                return "Gold"
-            elif score >= 50:
-                return "Silver"
-            else:
-                return "Bronze"
+        required = [
+            'Age', 'Gender', 'Annual Income', 'Income Bracket', 'Marital Status',
+            'Employment Status', 'Region', 'Urban/Rural Flag', 'State', 'ZIP Code',
+            'Plan Preference Type', 'Web Form Completion Rate', 'Quote Requested',
+            'Application Started', 'Behavior Score', 'Application Submitted', 'Application Applied'
+        ]
 
-        df["Lead_Tier"] = df["PTB_Score"].apply(tier)
+        missing = [col for col in required if col not in df.columns]
+        if missing:
+            st.error(f"❌ Missing columns: {missing}")
+        else:
+            input_df = df[required]
+            proba = model.predict_proba(input_df)[:, 1]
+            df["PTB_Score"] = proba * 100
 
-        st.subheader("✅ Scored Results")
-        display_df = df.copy()
-        display_df["PTB_Score"] = display_df["PTB_Score"].round(2).astype(str) + "%"
-        st.dataframe(display_df)
+            def tier(score):
+                if score >= 90:
+                    return "Platinum"
+                elif score >= 75:
+                    return "Gold"
+                elif score >= 50:
+                    return "Silver"
+                else:
+                    return "Bronze"
 
-        if st.button("🚀 Clear & Upload to Cosmos DB"):
-            clear_output_container()
-            upload_results(df)
+            df["Lead_Tier"] = df["PTB_Score"].apply(tier)
 
-st.markdown("---")
-st.header("📊 Lead Conversion Dashboard")
+            st.subheader("✅ Scored Results")
+            display_df = df.copy()
+            display_df["PTB_Score"] = display_df["PTB_Score"].round(2).astype(str) + "%"
+            st.dataframe(display_df)
+
+            if st.button("🚀 Clear & Upload to Cosmos DB"):
+                clear_output_container()
+                upload_results(df)
 
 @st.cache_data
 def load_dashboard_data():
@@ -137,69 +137,70 @@ def load_dashboard_data():
     items = list(container.read_all_items())
     return pd.DataFrame(items)
 
-dash_df = load_dashboard_data()
+with tabs[2]:
+    st.header("📊 Key Funnel Metrics + Tier Distribution")
+    dash_df = load_dashboard_data()
 
-if not dash_df.empty:
-    total = len(dash_df)
-    purchased = dash_df["Policy Purchased"].sum()
-    rate = (purchased / total) * 100
+    if not dash_df.empty:
+        total = len(dash_df)
+        purchased = dash_df["Policy Purchased"].sum()
+        rate = (purchased / total) * 100
 
-    quote_col = "Quote Requested (website)" if "Quote Requested (website)" in dash_df.columns else "Quote Requested"
-    quote_requested = dash_df[quote_col].isin(["1", 1, "Yes", True]).sum()
-    quote_rate = (quote_requested / total) * 100
+        quote_col = "Quote Requested (website)" if "Quote Requested (website)" in dash_df.columns else "Quote Requested"
+        quote_requested = dash_df[quote_col].isin(["1", 1, "Yes", True]).sum()
+        quote_rate = (quote_requested / total) * 100
 
-    app_started = dash_df["Application Started"].isin(["1", 1, "Yes", True]).sum()
-    app_started_rate = (app_started / total) * 100
+        app_started = dash_df["Application Started"].isin(["1", 1, "Yes", True]).sum()
+        app_started_rate = (app_started / total) * 100
 
-    app_submitted = dash_df["Application Submitted"].isin(["1", 1, "Yes", True]).sum()
-    app_submitted_rate = (app_submitted / total) * 100
+        app_submitted = dash_df["Application Submitted"].isin(["1", 1, "Yes", True]).sum()
+        app_submitted_rate = (app_submitted / total) * 100
 
-    submitted_df = dash_df[dash_df["Application Submitted"].isin(["1", 1, "Yes", True])]
-    submitted_to_purchased = (
-        submitted_df["Policy Purchased"].sum() / len(submitted_df) * 100 if len(submitted_df) > 0 else 0
-    )
+        submitted_df = dash_df[dash_df["Application Submitted"].isin(["1", 1, "Yes", True])]
+        submitted_to_purchased = (
+            submitted_df["Policy Purchased"].sum() / len(submitted_df) * 100 if len(submitted_df) > 0 else 0
+        )
 
-    st.subheader("📈 Key Funnel Metrics")
-    kpi_metrics = {
-        "Total Leads": f"{total:,}",
-        "Policies Purchased": f"{int(purchased)}",
-        "Conversion Rate": f"{rate:.2f}%",
-        "Quote Requested Rate": f"{quote_rate:.2f}%",
-        "App Started Rate": f"{app_started_rate:.2f}%",
-        "App Submitted Rate": f"{app_submitted_rate:.2f}%",
-        "Submitted → Policy Conversion": f"{submitted_to_purchased:.2f}%"
-    }
+        kpi_metrics = {
+            "Total Leads": f"{total:,}",
+            "Policies Purchased": f"{int(purchased)}",
+            "Conversion Rate": f"{rate:.2f}%",
+            "Quote Requested Rate": f"{quote_rate:.2f}%",
+            "App Started Rate": f"{app_started_rate:.2f}%",
+            "App Submitted Rate": f"{app_submitted_rate:.2f}%",
+            "Submitted → Policy Conversion": f"{submitted_to_purchased:.2f}%"
+        }
 
-    st.markdown("""
-    <style>
-    .kpi-card {
-        border: 1px solid #e1e1e1;
-        border-radius: 10px;
-        padding: 1rem;
-        margin-bottom: 1rem;
-        text-align: center;
-        font-size: 16px;
-        font-weight: bold;
-        background-color: #fafafa;
-    }
-    .kpi-container {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 1rem;
-    }
-    </style>
-    <div class="kpi-container">
-    """ +
-    "".join([f"<div class='kpi-card'>{label}<br><span style='font-size:24px'>{value}</span></div>" for label, value in kpi_metrics.items()]) +
-    "</div>" , unsafe_allow_html=True)
+        st.markdown("""
+        <style>
+        .kpi-card {
+            border: 1px solid #e1e1e1;
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            text-align: center;
+            font-size: 16px;
+            font-weight: bold;
+            background-color: #fafafa;
+        }
+        .kpi-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        </style>
+        <div class="kpi-container">
+        """ +
+        "".join([f"<div class='kpi-card'>{label}<br><span style='font-size:24px'>{value}</span></div>" for label, value in kpi_metrics.items()]) +
+        "</div>" , unsafe_allow_html=True)
 
-    st.subheader("🏅 Lead Tier Distribution")
-    tier_counts = dash_df["Lead_Tier"].value_counts().to_dict()
-    color_map = {"Bronze": "#d17c45", "Silver": "#7c97c4", "Gold": "#f2c94c", "Platinum": "#a97ff0"}
+        st.subheader("🏅 Lead Tier Distribution")
+        tier_counts = dash_df["Lead_Tier"].value_counts().to_dict()
+        color_map = {"Bronze": "#d17c45", "Silver": "#7c97c4", "Gold": "#f2c94c", "Platinum": "#a97ff0"}
 
-    for tier in ["Bronze", "Silver", "Gold", "Platinum"]:
-        count = tier_counts.get(tier, 0)
-        bar = f"<div style='background:{color_map.get(tier)};width:{min(count/total*100,100)}%;height:10px;border-radius:4px'></div>"
-        st.markdown(f"<div style='display:flex;justify-content:space-between'><b>{tier}</b><b><span style='font-weight:bold'>{count}</span></b></div>{bar}<br>", unsafe_allow_html=True)
-else:
-    st.warning("⚠️ No scored data found in output container.")
+        for tier in ["Bronze", "Silver", "Gold", "Platinum"]:
+            count = tier_counts.get(tier, 0)
+            bar = f"<div style='background:{color_map.get(tier)};width:{min(count/total*100,100)}%;height:10px;border-radius:4px'></div>"
+            st.markdown(f"<div style='display:flex;justify-content:space-between'><b>{tier}</b><b><span style='font-weight:bold'>{count}</span></b></div>{bar}<br>", unsafe_allow_html=True)
+    else:
+        st.warning("⚠️ No scored data found in output container.")
