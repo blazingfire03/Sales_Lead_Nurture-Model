@@ -138,14 +138,78 @@ with tabs[1]:
                 upload_results(df)
 
 with tabs[2]:
-    st.title("📊 KPI Dashboard")
+    with tabs[2]:
     dash_df = load_dashboard_data()
-    if dash_df.empty:
-        st.warning("⚠️ No scored data found in output container.")
-    else:
-        # KPI layout from earlier is retained here...
-        pass
+    if not dash_df.empty:
+        st.title("📊 KPI Dashboard")
+        st.markdown("**Key Funnel Metrics**")
 
+        total = len(dash_df)
+        purchased = dash_df["Policy Purchased"].sum()
+        rate = (purchased / total) * 100
+
+        quote_col = "Quote Requested (website)" if "Quote Requested (website)" in dash_df.columns else "Quote Requested"
+        quote_requested = dash_df[quote_col].isin(["1", 1, "Yes", True]).sum()
+        quote_rate = (quote_requested / total) * 100
+
+        app_started = dash_df["Application Started"].isin(["1", 1, "Yes", True]).sum()
+        app_started_rate = (app_started / total) * 100
+
+        app_submitted = dash_df["Application Submitted"].isin(["1", 1, "Yes", True]).sum()
+        app_submitted_rate = (app_submitted / total) * 100
+
+        submitted_df = dash_df[dash_df["Application Submitted"].isin(["1", 1, "Yes", True])]
+        submitted_count = len(submitted_df)
+        submitted_to_purchased = (
+            submitted_df["Policy Purchased"].sum() / submitted_count * 100
+            if submitted_count > 0 else 0
+        )
+
+        kpi_values = [
+            ("Total Leads", f"{total}"),
+            ("Policies Purchased", f"{int(purchased)}"),
+            ("Conversion Rate", f"{rate:.2f}%"),
+            ("Quote Requested Rate", f"{quote_rate:.2f}%"),
+            ("App Started Rate", f"{app_started_rate:.2f}%"),
+            ("App Submitted Rate", f"{app_submitted_rate:.2f}%"),
+            ("Submitted + Policy Conversion", f"{submitted_to_purchased:.2f}%")
+        ]
+
+        first_row = kpi_values[:4]
+        second_row = kpi_values[4:]
+
+        def build_kpi_row(row_data):
+            return "".join([
+                f"<div style='flex: 1; min-width: 180px; max-width: 250px; border: 1px solid #ddd; border-radius: 12px; padding: 18px; margin: 8px; background: #fff;'>"
+                f"<div style='font-size: 13px; font-weight: 500; color: #333;'>{title}</div>"
+                f"<div style='font-size: 28px; font-weight: 700; margin-top: 6px; color: #111;'>{value}</div>"
+                f"</div>" for title, value in row_data
+            ])
+
+        st.markdown(f"<div style='display: flex; justify-content: space-between; flex-wrap: wrap;'>{build_kpi_row(first_row)}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='display: flex; justify-content: flex-start; flex-wrap: wrap;'>{build_kpi_row(second_row)}</div>", unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.markdown("**Lead Tier Distribution**")
+
+        tier_counts = dash_df["Lead_Tier"].value_counts().to_dict()
+
+        def render_bar(label, count, color):
+            return f"""
+            <div style='margin-bottom: 12px;'>
+                <strong>{label}</strong>
+                <div style='background-color: #eee; border-radius: 5px; overflow: hidden;'>
+                    <div style='background-color: {color}; width: {count}px; height: 16px;'></div>
+                </div>
+                <div style='text-align: right; font-weight: bold;'>{count}</div>
+            </div>
+            """
+
+        bar_html = ""
+        bar_html += render_bar("🥉 Bronze", tier_counts.get("Bronze", 0), "#d97c40")
+        bar_html += render_bar("🥈 Silver", tier_counts.get("Silver", 0), "#608cb6")
+        bar_html += render_bar("🥇 Gold", tier_counts.get("Gold", 0), "#f2c84b")
+        bar_html += render_bar("🏆 Platinum", tier_counts.get("Platinum", 0), "#bb83f2")
 with tabs[3]:
     st.title("📈 Charts Dashboard")
     dash_df = load_dashboard_data()
