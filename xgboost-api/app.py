@@ -88,7 +88,7 @@ def load_dashboard_data():
     return pd.DataFrame(items)
 
 # === TABS ===
-tabs = st.tabs(["🤖 S-core & Upload", "📊 KPIs", "📈 Charts", "📤 Export"])
+tabs = st.tabs(["🤖 Score & Upload", "📊 KPIs", "📈 Charts", "📤 Export"])
 
 with tabs[0]:
     st.title("Sales Lead Nurture Model Dashboard")
