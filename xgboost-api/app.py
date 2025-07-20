@@ -137,70 +137,56 @@ def load_dashboard_data():
     items = list(container.read_all_items())
     return pd.DataFrame(items)
 
-with tabs[2]:
-    st.header("📊 Key Funnel Metrics + Tier Distribution")
+with tabs[3]:
     dash_df = load_dashboard_data()
-
     if not dash_df.empty:
-        total = len(dash_df)
-        purchased = dash_df["Policy Purchased"].sum()
-        rate = (purchased / total) * 100
+        st.subheader("1️⃣ Lead Tier by State")
+        states = st.multiselect("Filter by State:", dash_df["State"].dropna().unique())
+        filtered1 = dash_df[dash_df["State"].isin(states)] if states else dash_df
+        fig1 = px.histogram(filtered1, x="State", color="Lead_Tier", barmode="group")
+        st.plotly_chart(fig1, use_container_width=True)
 
+        st.subheader("2️⃣ Lead Tier by Income Bracket")
+        fig2 = px.histogram(dash_df, x="Income Bracket", color="Lead_Tier", barmode="stack")
+        st.plotly_chart(fig2, use_container_width=True)
+
+        st.subheader("3️⃣ Lead Tier by Age Group")
+        ages = st.multiselect("Filter by Age Group:", dash_df["Age Group"].dropna().unique())
+        filtered3 = dash_df[dash_df["Age Group"].isin(ages)] if ages else dash_df
+        fig3 = px.histogram(filtered3, x="Age Group", color="Lead_Tier", barmode="group")
+        st.plotly_chart(fig3, use_container_width=True)
+
+        st.subheader("4️⃣ Lead Tier by Gender (Filtered by Employment)")
+        jobs = ["All"] + dash_df["Employment Status"].dropna().unique().tolist()
+        emp_filter = st.selectbox("Employment Status:", jobs)
+        filtered4 = dash_df if emp_filter == "All" else dash_df[dash_df["Employment Status"] == emp_filter]
+        fig4 = px.histogram(filtered4, x="Gender", color="Lead_Tier", barmode="group")
+        st.plotly_chart(fig4, use_container_width=True)
+
+        st.subheader("5️⃣ Quote Requested vs Purchase Channel")
         quote_col = "Quote Requested (website)" if "Quote Requested (website)" in dash_df.columns else "Quote Requested"
-        quote_requested = dash_df[quote_col].isin(["1", 1, "Yes", True]).sum()
-        quote_rate = (quote_requested / total) * 100
+        gender_options = dash_df["Gender"].dropna().unique().tolist()
+        selected_genders = st.multiselect("Filter by Gender:", gender_options, default=gender_options)
 
-        app_started = dash_df["Application Started"].isin(["1", 1, "Yes", True]).sum()
-        app_started_rate = (app_started / total) * 100
+        income_options = dash_df["Income Bracket"].dropna().unique().tolist()
+        selected_incomes = st.multiselect("Filter by Income Bracket:", income_options, default=income_options)
 
-        app_submitted = dash_df["Application Submitted"].isin(["1", 1, "Yes", True]).sum()
-        app_submitted_rate = (app_submitted / total) * 100
+        quote_options = dash_df[quote_col].dropna().unique().tolist()
+        selected_quotes = st.multiselect("Filter by Quote Requested:", quote_options, default=quote_options)
 
-        submitted_df = dash_df[dash_df["Application Submitted"].isin(["1", 1, "Yes", True])]
-        submitted_to_purchased = (
-            submitted_df["Policy Purchased"].sum() / len(submitted_df) * 100 if len(submitted_df) > 0 else 0
+        filtered5 = dash_df[
+            (dash_df["Gender"].isin(selected_genders)) &
+            (dash_df["Income Bracket"].isin(selected_incomes)) &
+            (dash_df[quote_col].isin(selected_quotes))
+        ]
+
+        fig5 = px.histogram(
+            filtered5,
+            x="Purchase Channel",
+            color=quote_col,
+            barmode="group",
+            title="Quote Requested vs Purchase Channel"
         )
-
-        kpi_metrics = {
-            "Total Leads": f"{total:,}",
-            "Policies Purchased": f"{int(purchased)}",
-            "Conversion Rate": f"{rate:.2f}%",
-            "Quote Requested Rate": f"{quote_rate:.2f}%",
-            "App Started Rate": f"{app_started_rate:.2f}%",
-            "App Submitted Rate": f"{app_submitted_rate:.2f}%",
-            "Submitted → Policy Conversion": f"{submitted_to_purchased:.2f}%"
-        }
-
-        st.markdown("""
-        <style>
-        .kpi-card {
-            border: 1px solid #e1e1e1;
-            border-radius: 10px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            text-align: center;
-            font-size: 16px;
-            font-weight: bold;
-            background-color: #fafafa;
-        }
-        .kpi-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-        }
-        </style>
-        <div class="kpi-container">
-        """ +
-        "".join([f"<div class='kpi-card'>{label}<br><span style='font-size:24px'>{value}</span></div>" for label, value in kpi_metrics.items()]) +
-        "</div>" , unsafe_allow_html=True)
-
-        st.subheader("🏅 Lead Tier Distribution")
-        tier_counts = dash_df["Lead_Tier"].value_counts().to_dict()
-        color_map = {"Bronze": "#d17c45", "Silver": "#7c97c4", "Gold": "#f2c94c", "Platinum": "#a97ff0"}
-
-        for tier in ["Bronze", "Silver", "Gold", "Platinum"]:
-            count = tier_counts.get(tier, 0)
-            bar = f"<div style='background:{color_map.get(tier)};width:{min(count/total*100,100)}%;height:10px;border-radius:4px'></div>"
-            st.markdown(f"<div style='display:flex;justify-content:space-between'><b>{tier}</b><b><span style='font-weight:bold'>{count}</span></b></div>{bar}<br>", unsafe_allow_html=True)
+        st.plotly_chart(fig5, use_container_width=True)
     else:
         st.warning("⚠️ No scored data found in output container.")
