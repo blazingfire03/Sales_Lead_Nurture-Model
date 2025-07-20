@@ -7,7 +7,7 @@ from PIL import Image
 from azure.cosmos import CosmosClient, PartitionKey
 import plotly.express as px
 
-# === GLOBAL CONFIG ===
+# === PAGE CONFIG ===
 st.set_page_config(page_title="Sales Lead Nurture Model Dashboard", layout="wide")
 
 # === Load Model ===
@@ -20,104 +20,62 @@ model = load_model()
 
 # === Display Logo and Title ===
 logo_path = os.path.join(os.path.dirname(__file__), "analytics_ai_logo.png")
-cols = st.columns([1, 8])
+col1, col2 = st.columns([1, 6])
 if os.path.exists(logo_path):
     logo = Image.open(logo_path)
-    cols[0].image(logo, width=120)
-cols[1].markdown("""
-    <h1 style='padding-top: 10px;'>Sales Lead Nurture Model Dashboard</h1>
+    col1.image(logo, width=100)
+col2.markdown("""
+    <h1 style='padding-top: 10px; padding-bottom: 5px;'>PTB Score Predictor + Cosmos DB Dashboard</h1>
+    """, unsafe_allow_html=True)
+
+# === Navigation Bar (Static) ===
+st.markdown("""
+    <style>
+        .navbar {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+            margin-bottom: 2rem;
+        }
+        .navbar button {
+            background-color: #f0f2f6;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .navbar button.active {
+            background-color: #1677ff;
+            color: white;
+        }
+    </style>
+    <div class="navbar">
+        <button>🧠 S-core & Upload</button>
+        <button class="active">📊 KPIs</button>
+        <button>📈 Charts</button>
+        <button>📤 Export</button>
+    </div>
 """, unsafe_allow_html=True)
 
-# === Score & Upload Section ===
-st.markdown("<h2 style='margin-top: 30px;'>🧠 Score & Upload</h2>", unsafe_allow_html=True)
-
-# === Load Input Data ===
+# === Load Dashboard Data ===
 @st.cache_data
-def fetch_data():
+def load_dashboard_data():
     endpoint = st.secrets["COSMOS_ENDPOINT"]
     key = st.secrets["COSMOS_KEY"]
     db_name = st.secrets["DATABASE_NAME"]
-    container_name = st.secrets["INPUT_CONTAINER"]
+    container_name = st.secrets["OUTPUT_CONTAINER"]
     client = CosmosClient(endpoint, credential=key)
     db = client.get_database_client(db_name)
     container = db.get_container_client(container_name)
     items = list(container.read_all_items())
     return pd.DataFrame(items)
 
-def clear_output_container():
-    endpoint = st.secrets["COSMOS_ENDPOINT"]
-    key = st.secrets["COSMOS_KEY"]
-    db_name = st.secrets["DATABASE_NAME"]
-    output_container = st.secrets["OUTPUT_CONTAINER"]
-    client = CosmosClient(endpoint, credential=key)
-    db = client.get_database_client(db_name)
-    container = db.get_container_client(output_container)
-    items = list(container.read_all_items())
-    for item in items:
-        container.delete_item(item=item["id"], partition_key=item["id"])
-    st.info(f"🧹 Cleared {len(items)} records from '{output_container}'.")
-
-def upload_results(df):
-    endpoint = st.secrets["COSMOS_ENDPOINT"]
-    key = st.secrets["COSMOS_KEY"]
-    db_name = st.secrets["DATABASE_NAME"]
-    output_container = st.secrets["OUTPUT_CONTAINER"]
-    client = CosmosClient(endpoint, credential=key)
-    db = client.get_database_client(db_name)
-    container = db.create_container_if_not_exists(
-        id=output_container,
-        partition_key=PartitionKey(path="/id"),
-        offer_throughput=400
-    )
-    for _, row in df.iterrows():
-        record = row.to_dict()
-        record["id"] = str(uuid.uuid4())
-        container.upsert_item(record)
-    st.success(f"✅ Uploaded {len(df)} leads to '{output_container}'.")
-
-# === Score Section ===
-st.markdown("<h3>📄 Input Data</h3>", unsafe_allow_html=True)
-df = fetch_data()
-if df.empty:
-    st.warning("⚠️ No input data found.")
-else:
-    st.dataframe(df.head())
-    required = ['Age', 'Gender', 'Annual Income', 'Income Bracket', 'Marital Status',
-                'Employment Status', 'Region', 'Urban/Rural Flag', 'State', 'ZIP Code',
-                'Plan Preference Type', 'Web Form Completion Rate', 'Quote Requested',
-                'Application Started', 'Behavior Score', 'Application Submitted', 'Application Applied']
-
-    missing = [col for col in required if col not in df.columns]
-    if missing:
-        st.error(f"❌ Missing columns: {missing}")
-    else:
-        input_df = df[required]
-        df["PTB_Score"] = model.predict_proba(input_df)[:, 1] * 100
-        df["Lead_Tier"] = df["PTB_Score"].apply(lambda s: "Platinum" if s>=90 else "Gold" if s>=75 else "Silver" if s>=50 else "Bronze")
-        st.markdown("<h3>✅ Scored Results</h3>", unsafe_allow_html=True)
-        st.dataframe(df["PTB_Score"].round(2).to_frame().join(df.drop(columns=["PTB_Score"])))
-        if st.button("🚀 Clear & Upload to Cosmos DB"):
-            clear_output_container()
-            upload_results(df)
-
-# === KPIs Section ===
-st.markdown("---")
-st.markdown("<h2 style='margin-top: 30px;'>📊 Key Funnel Metrics</h2>", unsafe_allow_html=True)
-
-def load_dashboard_data():
-    endpoint = st.secrets["COSMOS_ENDPOINT"]
-    key = st.secrets["COSMOS_KEY"]
-    db_name = st.secrets["DATABASE_NAME"]
-    output_container = st.secrets["OUTPUT_CONTAINER"]
-    client = CosmosClient(endpoint, credential=key)
-    db = client.get_database_client(db_name)
-    container = db.get_container_client(output_container)
-    items = list(container.read_all_items())
-    return pd.DataFrame(items)
-
 dash_df = load_dashboard_data()
 
-if not dash_df.empty:
+if dash_df.empty:
+    st.warning("⚠️ No scored data found in output container.")
+else:
     total = len(dash_df)
     purchased = dash_df["Policy Purchased"].sum()
     rate = (purchased / total) * 100
@@ -135,27 +93,31 @@ if not dash_df.empty:
     submitted_df = dash_df[dash_df["Application Submitted"].isin(["1", 1, "Yes", True])]
     submitted_to_purchased = (submitted_df["Policy Purchased"].sum() / len(submitted_df)) * 100 if len(submitted_df) > 0 else 0
 
-    with st.container():
-        k1, k2, k3, k4 = st.columns(4)
-        k1.metric("Total Leads", f"{total:,}")
-        k2.metric("Policies Purchased", int(purchased))
-        k3.metric("Conversion Rate", f"{rate:.2f}%")
-        k4.metric("Quote Requested Rate", f"{quote_rate:.2f}%")
+    # === KPI Card Layout ===
+    st.markdown("## Key Funnel Metrics")
 
-        k5, k6, k7 = st.columns(3)
-        k5.metric("App Started Rate", f"{app_started_rate:.2f}%")
-        k6.metric("App Submitted Rate", f"{app_submitted_rate:.2f}%")
-        k7.metric("Submitted → Policy Conversion", f"{submitted_to_purchased:.2f}%")
+    row1 = st.columns(4)
+    row1[0].metric("Total Leads", f"{total:,}")
+    row1[1].metric("Policies Purchased", f"{int(purchased):,}")
+    row1[2].metric("Conversion Rate", f"{rate:.2f}%")
+    row1[3].metric("Quote Requested Rate", f"{quote_rate:.2f}%")
 
-    st.markdown("<h2 style='margin-top: 40px;'>🏅 Lead Tier Distribution</h2>", unsafe_allow_html=True)
+    row2 = st.columns(3)
+    row2[0].metric("App Started Rate", f"{app_started_rate:.2f}%")
+    row2[1].metric("App Submitted Rate", f"{app_submitted_rate:.2f}%")
+    row2[2].metric("Submitted + Policy Conversion", f"{submitted_to_purchased:.2f}%")
+
+    # === Tier Distribution ===
+    st.markdown("## Lead Tier Distribution")
+
     tier_counts = dash_df["Lead_Tier"].value_counts().to_dict()
-    b, s, g, p = [tier_counts.get(t, 0) for t in ["Bronze", "Silver", "Gold", "Platinum"]]
+    bronze = tier_counts.get("Bronze", 0)
+    silver = tier_counts.get("Silver", 0)
+    gold = tier_counts.get("Gold", 0)
+    platinum = tier_counts.get("Platinum", 0)
 
-    t1, t2, t3, t4 = st.columns(4)
-    t1.metric("🥉 Bronze", b)
-    t2.metric("🥈 Silver", s)
-    t3.metric("🥇 Gold", g)
-    t4.metric("🏆 Platinum", p)
-
-else:
-    st.warning("⚠️ No scored data found in output container.")
+    col_tier1, col_tier2, col_tier3, col_tier4 = st.columns(4)
+    col_tier1.metric("🥉 Bronze", bronze)
+    col_tier2.metric("🥈 Silver", silver)
+    col_tier3.metric("🥇 Gold", gold)
+    col_tier4.metric("🏆 Platinum", platinum)
