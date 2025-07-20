@@ -112,7 +112,8 @@ else:
         df["Lead_Tier"] = df["PTB_Score"].apply(tier)
 
         st.subheader("✅ Scored Results")
-        st.dataframe(df["PTB_Score"].round(2).astype(str) + "%".astype(str).to_frame().join(df))
+        df["PTB_Score"] = df["PTB_Score"].round(2)
+        st.dataframe(df)
 
         if st.button("🚀 Clear & Upload to Cosmos DB"):
             clear_output_container()
@@ -157,7 +158,6 @@ if not dash_df.empty:
         submitted_df["Policy Purchased"].sum() / len(submitted_df) * 100 if len(submitted_df) > 0 else 0
     )
 
-    # === KPI Card Layout with borders ===
     st.subheader("📈 Key Funnel Metrics")
     kpi_metrics = {
         "Total Leads": f"{total:,}",
@@ -192,7 +192,6 @@ if not dash_df.empty:
     "".join([f"<div class='kpi-card'>{label}<br><span style='font-size:24px'>{value}</span></div>" for label, value in kpi_metrics.items()]) +
     "</div>" , unsafe_allow_html=True)
 
-    # === Lead Tier Distribution (styled bar)
     st.subheader("🏅 Lead Tier Distribution")
     tier_counts = dash_df["Lead_Tier"].value_counts().to_dict()
     color_map = {"Bronze": "#d17c45", "Silver": "#7c97c4", "Gold": "#f2c94c", "Platinum": "#a97ff0"}
