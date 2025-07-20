@@ -177,26 +177,33 @@ with tabs[2]:
             if submitted_count > 0 else 0
         )
 
-        # KPI Layout with border
-        st.markdown("<div style='display: flex; flex-wrap: wrap; gap: 20px;'>", unsafe_allow_html=True)
+        kpi_values = [
+            ("Total Leads", f"{total}"),
+            ("Policies Purchased", f"{int(purchased)}"),
+            ("Conversion Rate", f"{rate:.2f}%"),
+            ("Quote Requested Rate", f"{quote_rate:.2f}%"),
+            ("App Started Rate", f"{app_started_rate:.2f}%"),
+            ("App Submitted Rate", f"{app_submitted_rate:.2f}%"),
+            ("Submitted + Policy Conversion", f"{submitted_to_purchased:.2f}%")
+        ]
 
-        def kpi_box(title, value):
-            return f"""
-            <div style='border: 1px solid #ddd; border-radius: 10px; padding: 20px; width: 220px;'>
-                <div style='font-weight: 500; font-size: 14px;'>{title}</div>
-                <div style='font-weight: 700; font-size: 28px; margin-top: 5px;'>{value}</div>
+        kpi_html = "".join([
+            f"""
+            <div style='flex: 1; min-width: 180px; max-width: 250px; border: 1px solid #ddd; border-radius: 12px; padding: 18px; margin: 8px; background: #fff;'>
+                <div style='font-size: 13px; font-weight: 500; color: #333;'>{title}</div>
+                <div style='font-size: 28px; font-weight: 700; margin-top: 6px; color: #111;'>{value}</div>
             </div>
-            """
+            """ for title, value in kpi_values
+        ])
 
-        st.markdown(kpi_box("Total Leads", f"{total}"), unsafe_allow_html=True)
-        st.markdown(kpi_box("Policies Purchased", f"{int(purchased)}"), unsafe_allow_html=True)
-        st.markdown(kpi_box("Conversion Rate", f"{rate:.2f}%"), unsafe_allow_html=True)
-        st.markdown(kpi_box("Quote Requested Rate", f"{quote_rate:.2f}%"), unsafe_allow_html=True)
-        st.markdown(kpi_box("App Started Rate", f"{app_started_rate:.2f}%"), unsafe_allow_html=True)
-        st.markdown(kpi_box("App Submitted Rate", f"{app_submitted_rate:.2f}%"), unsafe_allow_html=True)
-        st.markdown(kpi_box("Submitted + Policy Conversion", f"{submitted_to_purchased:.2f}%"), unsafe_allow_html=True)
-
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div style='display: flex; flex-wrap: wrap; justify-content: space-between;'>
+                {kpi_html}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
         st.markdown("---")
         st.markdown("**Lead Tier Distribution**")
