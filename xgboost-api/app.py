@@ -15,13 +15,13 @@ def load_model():
 model = load_model()
 
 # === Display Company Logo ===
-logo_path = os.path.join(os.path.dirname(__file__), "assets", "analytics_ai_logo.png")  # Update path as needed
+logo_path = os.path.join(os.path.dirname(__file__), "analytics_ai_logo.png")
 if os.path.exists(logo_path):
     logo = Image.open(logo_path)
     st.image(logo, width=250)
 else:
     st.warning("⚠️ Company logo not found.")
-
+    
 # === Load Input Data ===
 @st.cache_data
 def fetch_data():
