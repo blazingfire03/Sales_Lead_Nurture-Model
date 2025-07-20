@@ -265,3 +265,10 @@ if not dash_df.empty:
 
 else:
     st.warning("⚠️ No scored data found in output container.")
+
+from PIL import Image
+
+# Display the logo
+logo_path = "Analytics AI logo.png"  # Make sure it's in the same directory as app.py
+logo = Image.open(logo_path)
+st.image(logo, width=250, use_column_width=False)
