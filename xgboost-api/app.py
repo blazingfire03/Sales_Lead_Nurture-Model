@@ -187,23 +187,19 @@ with tabs[2]:
             ("Submitted + Policy Conversion", f"{submitted_to_purchased:.2f}%")
         ]
 
-        kpi_html = "".join([
-            f"""
-            <div style='flex: 1; min-width: 180px; max-width: 250px; border: 1px solid #ddd; border-radius: 12px; padding: 18px; margin: 8px; background: #fff;'>
-                <div style='font-size: 13px; font-weight: 500; color: #333;'>{title}</div>
-                <div style='font-size: 28px; font-weight: 700; margin-top: 6px; color: #111;'>{value}</div>
-            </div>
-            """ for title, value in kpi_values
-        ])
+        first_row = kpi_values[:4]
+        second_row = kpi_values[4:]
 
-        st.markdown(
-            f"""
-            <div style='display: flex; flex-wrap: wrap; justify-content: space-between;'>
-                {kpi_html}
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        def build_kpi_row(row_data):
+            return "".join([
+                f"<div style='flex: 1; min-width: 180px; max-width: 250px; border: 1px solid #ddd; border-radius: 12px; padding: 18px; margin: 8px; background: #fff;'>"
+                f"<div style='font-size: 13px; font-weight: 500; color: #333;'>{title}</div>"
+                f"<div style='font-size: 28px; font-weight: 700; margin-top: 6px; color: #111;'>{value}</div>"
+                f"</div>" for title, value in row_data
+            ])
+
+        st.markdown(f"<div style='display: flex; justify-content: space-between; flex-wrap: wrap;'>{build_kpi_row(first_row)}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='display: flex; justify-content: flex-start; flex-wrap: wrap;'>{build_kpi_row(second_row)}</div>", unsafe_allow_html=True)
 
         st.markdown("---")
         st.markdown("**Lead Tier Distribution**")
