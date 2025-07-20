@@ -190,3 +190,16 @@ with tabs[3]:
         st.plotly_chart(fig5, use_container_width=True)
     else:
         st.warning("⚠️ No scored data found in output container.")
+
+with tabs[4]:
+    dash_df = load_dashboard_data()
+    if not dash_df.empty:
+        st.title("📤 Export Scored Data")
+        st.download_button(
+            label="📥 Download Scored Leads CSV",
+            data=dash_df.to_csv(index=False),
+            file_name="scored_leads.csv",
+            mime="text/csv"
+        )
+    else:
+        st.warning("⚠️ No data available to export.")
