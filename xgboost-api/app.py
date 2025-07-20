@@ -5,6 +5,14 @@ import uuid
 import os
 from PIL import Image
 from azure.cosmos import CosmosClient, PartitionKey
+import plotly.express as px
+
+# === Page Configuration ===
+st.set_page_config(
+    page_title="Sales Lead Nurture Model Dashboard",
+    layout="wide",
+    page_icon="📊"
+)
 
 # === Load Model ===
 @st.cache_resource
@@ -21,7 +29,7 @@ if os.path.exists(logo_path):
     st.image(logo, width=250)
 else:
     st.warning("⚠️ Company logo not found.")
-    
+
 # === Load Input Data ===
 @st.cache_data
 def fetch_data():
@@ -88,196 +96,188 @@ def upload_results(df):
     except Exception as e:
         st.error(f"❌ Upload failed: {e}")
 
-# === App UI ===
-st.title("🧠 PTB Score Predictor + Cosmos DB Dashboard")
+# === Tabs UI ===
+tabs = st.tabs(["🏠 Overview", "🧠 Score & Upload", "📈 KPIs", "📊 Charts", "📥 Export"])
 
-with st.spinner("Loading input data from Cosmos DB..."):
-    df = fetch_data()
+# === Overview Tab ===
+with tabs[0]:
+    st.markdown("""
+    ## 🏠 Overview
+    This dashboard provides insights into lead scoring and conversion funnel for insurance sales. It helps visualize:
+    - Funnel performance
+    - Lead tier distribution
+    - Application outcomes
+    - Conversion rates by demographic
+    """)
 
-if df.empty:
-    st.warning("⚠️ No input data found.")
-else:
-    st.subheader("📄 Input Data")
-    st.dataframe(df.head())
+# === Score & Upload Tab ===
+with tabs[1]:
+    with st.spinner("Loading input data from Cosmos DB..."):
+        df = fetch_data()
 
-    # Required features
-    required = [
-        'Age', 'Gender', 'Annual Income', 'Income Bracket', 'Marital Status',
-        'Employment Status', 'Region', 'Urban/Rural Flag', 'State', 'ZIP Code',
-        'Plan Preference Type', 'Web Form Completion Rate', 'Quote Requested',
-        'Application Started', 'Behavior Score', 'Application Submitted', 'Application Applied'
-    ]
-
-    missing = [col for col in required if col not in df.columns]
-    if missing:
-        st.error(f"❌ Missing columns: {missing}")
+    if df.empty:
+        st.warning("⚠️ No input data found.")
     else:
-        try:
-            input_df = df[required]
-            proba = model.predict_proba(input_df)[:, 1]
-            df["PTB_Score"] = proba * 100
+        st.subheader("📄 Input Data")
+        st.dataframe(df.head())
 
-            def tier(score):
-                if score >= 90:
-                    return "Platinum"
-                elif score >= 75:
-                    return "Gold"
-                elif score >= 50:
-                    return "Silver"
-                else:
-                    return "Bronze"
+        required = [
+            'Age', 'Gender', 'Annual Income', 'Income Bracket', 'Marital Status',
+            'Employment Status', 'Region', 'Urban/Rural Flag', 'State', 'ZIP Code',
+            'Plan Preference Type', 'Web Form Completion Rate', 'Quote Requested',
+            'Application Started', 'Behavior Score', 'Application Submitted', 'Application Applied'
+        ]
 
-            df["Lead_Tier"] = df["PTB_Score"].apply(tier)
+        missing = [col for col in required if col not in df.columns]
+        if missing:
+            st.error(f"❌ Missing columns: {missing}")
+        else:
+            try:
+                input_df = df[required]
+                proba = model.predict_proba(input_df)[:, 1]
+                df["PTB_Score"] = proba * 100
 
-            st.subheader("✅ Scored Results")
-            st.dataframe(df[["PTB_Score", "Lead_Tier"]].join(df.drop(columns=["PTB_Score", "Lead_Tier"])))
+                def tier(score):
+                    if score >= 90:
+                        return "Platinum"
+                    elif score >= 75:
+                        return "Gold"
+                    elif score >= 50:
+                        return "Silver"
+                    else:
+                        return "Bronze"
 
-            if st.button("🚀 Clear & Upload to Cosmos DB"):
-                clear_output_container()
-                upload_results(df)
+                df["Lead_Tier"] = df["PTB_Score"].apply(tier)
 
-        except Exception as e:
-            st.error(f"❌ Scoring failed: {e}")
+                st.subheader("✅ Scored Results")
+                st.dataframe(df["PTB_Score"].round(2).to_frame().join(df.drop(columns=["PTB_Score"])))
 
-# === DASHBOARD SECTION ===
-st.markdown("---")
-st.header("📊 Lead Conversion Dashboard")
+                if st.button("🚀 Clear & Upload to Cosmos DB"):
+                    clear_output_container()
+                    upload_results(df)
 
-@st.cache_data
-def load_dashboard_data():
-    endpoint = st.secrets["COSMOS_ENDPOINT"]
-    key = st.secrets["COSMOS_KEY"]
-    db_name = st.secrets["DATABASE_NAME"]
-    output_container = st.secrets["OUTPUT_CONTAINER"]
+            except Exception as e:
+                st.error(f"❌ Scoring failed: {e}")
 
-    client = CosmosClient(endpoint, credential=key)
-    db = client.get_database_client(db_name)
-    container = db.get_container_client(output_container)
+# === KPIs Tab ===
+with tabs[2]:
+    @st.cache_data
+    def load_dashboard_data():
+        endpoint = st.secrets["COSMOS_ENDPOINT"]
+        key = st.secrets["COSMOS_KEY"]
+        db_name = st.secrets["DATABASE_NAME"]
+        output_container = st.secrets["OUTPUT_CONTAINER"]
 
-    items = list(container.read_all_items())
-    return pd.DataFrame(items)
+        client = CosmosClient(endpoint, credential=key)
+        db = client.get_database_client(db_name)
+        container = db.get_container_client(output_container)
 
-dash_df = load_dashboard_data()
+        items = list(container.read_all_items())
+        return pd.DataFrame(items)
 
-if not dash_df.empty:
-    total = len(dash_df)
-    purchased = dash_df["Policy Purchased"].sum()
-    rate = (purchased / total) * 100
+    dash_df = load_dashboard_data()
 
-    # Quote Requested Rate
-    quote_col = "Quote Requested (website)" if "Quote Requested (website)" in dash_df.columns else "Quote Requested"
-    quote_requested = dash_df[quote_col].isin(["1", 1, "Yes", True]).sum()
-    quote_rate = (quote_requested / total) * 100
+    if not dash_df.empty:
+        total = len(dash_df)
+        purchased = dash_df["Policy Purchased"].sum()
+        rate = (purchased / total) * 100
 
-    # Application Started Rate
-    app_started = dash_df["Application Started"].isin(["1", 1, "Yes", True]).sum()
-    app_started_rate = (app_started / total) * 100
+        quote_col = "Quote Requested (website)" if "Quote Requested (website)" in dash_df.columns else "Quote Requested"
+        quote_requested = dash_df[quote_col].isin(["1", 1, "Yes", True]).sum()
+        quote_rate = (quote_requested / total) * 100
 
-    # Application Submitted Rate
-    app_submitted = dash_df["Application Submitted"].isin(["1", 1, "Yes", True]).sum()
-    app_submitted_rate = (app_submitted / total) * 100
+        app_started = dash_df["Application Started"].isin(["1", 1, "Yes", True]).sum()
+        app_started_rate = (app_started / total) * 100
 
-    # Policy Conversion from Submitted Applications
-    submitted_df = dash_df[dash_df["Application Submitted"].isin(["1", 1, "Yes", True])]
-    submitted_count = len(submitted_df)
-    submitted_to_purchased = (
-        submitted_df["Policy Purchased"].sum() / submitted_count * 100
-        if submitted_count > 0 else 0
-    )
+        app_submitted = dash_df["Application Submitted"].isin(["1", 1, "Yes", True]).sum()
+        app_submitted_rate = (app_submitted / total) * 100
 
-    # === Display KPIs in two rows ===
-    st.subheader("📈 Key Funnel Metrics")
+        submitted_df = dash_df[dash_df["Application Submitted"].isin(["1", 1, "Yes", True])]
+        submitted_count = len(submitted_df)
+        submitted_to_purchased = (
+            submitted_df["Policy Purchased"].sum() / submitted_count * 100
+            if submitted_count > 0 else 0
+        )
 
-    k1, k2, k3 = st.columns(3)
-    k1.metric("Total Leads", total)
-    k2.metric("Policies Purchased", int(purchased))
-    k3.metric("Conversion Rate", f"{rate:.2f}%")
+        st.subheader("📈 Key Funnel Metrics")
 
-    k4, k5, k6, k7 = st.columns(4)
-    k4.metric("Quote Requested Rate", f"{quote_rate:.2f}%")
-    k5.metric("App Started Rate", f"{app_started_rate:.2f}%")
-    k6.metric("App Submitted Rate", f"{app_submitted_rate:.2f}%")
-    k7.metric("Submitted → Policy Conversion", f"{submitted_to_purchased:.2f}%")
+        k1, k2, k3 = st.columns(3)
+        k1.metric("Total Leads", total)
+        k2.metric("Policies Purchased", int(purchased))
+        k3.metric("Conversion Rate", f"{rate:.2f}%")
 
-    st.markdown("### 🥇 Lead Tier Distribution")
+        k4, k5, k6, k7 = st.columns(4)
+        k4.metric("Quote Requested Rate", f"{quote_rate:.2f}%")
+        k5.metric("App Started Rate", f"{app_started_rate:.2f}%")
+        k6.metric("App Submitted Rate", f"{app_submitted_rate:.2f}%")
+        k7.metric("Submitted → Policy Conversion", f"{submitted_to_purchased:.2f}%")
 
-    tier_counts = dash_df["Lead_Tier"].value_counts().to_dict()
+        st.markdown("### 🥇 Lead Tier Distribution")
+        tier_counts = dash_df["Lead_Tier"].value_counts().to_dict()
 
-    bronze_count = tier_counts.get("Bronze", 0)
-    silver_count = tier_counts.get("Silver", 0)
-    gold_count = tier_counts.get("Gold", 0)
-    platinum_count = tier_counts.get("Platinum", 0)
+        t1, t2, t3, t4 = st.columns(4)
+        t1.metric("🥉 Bronze", tier_counts.get("Bronze", 0))
+        t2.metric("🥈 Silver", tier_counts.get("Silver", 0))
+        t3.metric("🥇 Gold", tier_counts.get("Gold", 0))
+        t4.metric("🏆 Platinum", tier_counts.get("Platinum", 0))
 
-    t1, t2, t3, t4 = st.columns(4)
-    t1.metric("🥉 Bronze", bronze_count)
-    t2.metric("🥈 Silver", silver_count)
-    t3.metric("🥇 Gold", gold_count)
-    t4.metric("🏆 Platinum", platinum_count)
+# === Charts Tab ===
+with tabs[3]:
+    if not dash_df.empty:
+        st.subheader("1️⃣ Lead Tier by State")
+        states = st.multiselect("Filter by State:", dash_df["State"].dropna().unique())
+        filtered1 = dash_df[dash_df["State"].isin(states)] if states else dash_df
+        fig1 = px.histogram(filtered1, x="State", color="Lead_Tier", barmode="group")
+        st.plotly_chart(fig1, use_container_width=True)
 
-    st.divider()
+        st.subheader("2️⃣ Lead Tier by Income Bracket")
+        fig2 = px.histogram(dash_df, x="Income Bracket", color="Lead_Tier", barmode="stack")
+        st.plotly_chart(fig2, use_container_width=True)
 
-    import plotly.express as px
+        st.subheader("3️⃣ Lead Tier by Age Group")
+        ages = st.multiselect("Filter by Age Group:", dash_df["Age Group"].dropna().unique())
+        filtered3 = dash_df[dash_df["Age Group"].isin(ages)] if ages else dash_df
+        fig3 = px.histogram(filtered3, x="Age Group", color="Lead_Tier", barmode="group")
+        st.plotly_chart(fig3, use_container_width=True)
 
-    # Chart 1: Lead Tier vs State
-    st.subheader("1️⃣ Lead Tier by State")
-    states = st.multiselect("Filter by State:", dash_df["State"].dropna().unique())
-    filtered1 = dash_df[dash_df["State"].isin(states)] if states else dash_df
-    fig1 = px.histogram(filtered1, x="State", color="Lead_Tier", barmode="group")
-    st.plotly_chart(fig1, use_container_width=True)
+        st.subheader("4️⃣ Lead Tier by Gender (Filtered by Employment)")
+        jobs = ["All"] + dash_df["Employment Status"].dropna().unique().tolist()
+        emp_filter = st.selectbox("Employment Status:", jobs)
+        filtered4 = dash_df if emp_filter == "All" else dash_df[dash_df["Employment Status"] == emp_filter]
+        fig4 = px.histogram(filtered4, x="Gender", color="Lead_Tier", barmode="group")
+        st.plotly_chart(fig4, use_container_width=True)
 
-    # Chart 2: Lead Tier vs Income Bracket
-    st.subheader("2️⃣ Lead Tier by Income Bracket")
-    fig2 = px.histogram(dash_df, x="Income Bracket", color="Lead_Tier", barmode="stack")
-    st.plotly_chart(fig2, use_container_width=True)
+        st.subheader("5️⃣ Quote Requested vs Purchase Channel")
+        gender_options = dash_df["Gender"].dropna().unique().tolist()
+        selected_genders = st.multiselect("Filter by Gender:", gender_options, default=gender_options)
 
-    # Chart 3: Lead Tier vs Age Group
-    st.subheader("3️⃣ Lead Tier by Age Group")
-    ages = st.multiselect("Filter by Age Group:", dash_df["Age Group"].dropna().unique())
-    filtered3 = dash_df[dash_df["Age Group"].isin(ages)] if ages else dash_df
-    fig3 = px.histogram(filtered3, x="Age Group", color="Lead_Tier", barmode="group")
-    st.plotly_chart(fig3, use_container_width=True)
+        income_options = dash_df["Income Bracket"].dropna().unique().tolist()
+        selected_incomes = st.multiselect("Filter by Income Bracket:", income_options, default=income_options)
 
-    # Chart 4: Lead Tier vs Gender filtered by Employment
-    st.subheader("4️⃣ Lead Tier by Gender (Filtered by Employment)")
-    jobs = ["All"] + dash_df["Employment Status"].dropna().unique().tolist()
-    emp_filter = st.selectbox("Employment Status:", jobs)
-    filtered4 = dash_df if emp_filter == "All" else dash_df[dash_df["Employment Status"] == emp_filter]
-    fig4 = px.histogram(filtered4, x="Gender", color="Lead_Tier", barmode="group")
-    st.plotly_chart(fig4, use_container_width=True)
+        quote_options = dash_df[quote_col].dropna().unique().tolist()
+        selected_quotes = st.multiselect("Filter by Quote Requested:", quote_options, default=quote_options)
 
-    # Chart 5: Quote Requested vs Purchase Channel (Filtered by Gender, Income Bracket, Quote Requested)
-    st.subheader("5️⃣ Quote Requested vs Purchase Channel")
+        filtered5 = dash_df[
+            (dash_df["Gender"].isin(selected_genders)) &
+            (dash_df["Income Bracket"].isin(selected_incomes)) &
+            (dash_df[quote_col].isin(selected_quotes))
+        ]
 
-    gender_options = dash_df["Gender"].dropna().unique().tolist()
-    selected_genders = st.multiselect("Filter by Gender:", gender_options, default=gender_options)
+        fig5 = px.histogram(
+            filtered5,
+            x="Purchase Channel",
+            color=quote_col,
+            barmode="group",
+            title="Quote Requested vs Purchase Channel"
+        )
+        st.plotly_chart(fig5, use_container_width=True)
 
-    income_options = dash_df["Income Bracket"].dropna().unique().tolist()
-    selected_incomes = st.multiselect("Filter by Income Bracket:", income_options, default=income_options)
-
-    quote_options = dash_df[quote_col].dropna().unique().tolist()
-    selected_quotes = st.multiselect("Filter by Quote Requested:", quote_options, default=quote_options)
-
-    filtered5 = dash_df[
-        (dash_df["Gender"].isin(selected_genders)) &
-        (dash_df["Income Bracket"].isin(selected_incomes)) &
-        (dash_df[quote_col].isin(selected_quotes))
-    ]
-
-    fig5 = px.histogram(
-        filtered5,
-        x="Purchase Channel",
-        color=quote_col,
-        barmode="group",
-        title="Quote Requested vs Purchase Channel"
-    )
-    st.plotly_chart(fig5, use_container_width=True)
-
-else:
-    st.warning("⚠️ No scored data found in output container.")
-
-from PIL import Image
-
-# Display the logo
-logo_path = "Analytics AI logo.png"  # Make sure it's in the same directory as app.py
-logo = Image.open(logo_path)
-st.image(logo, width=250, use_column_width=False)
+# === Export Tab ===
+with tabs[4]:
+    if not dash_df.empty:
+        st.download_button(
+            label="⬇️ Download Scored Leads as CSV",
+            data=dash_df.to_csv(index=False),
+            file_name="scored_leads.csv",
+            mime="text/csv"
+        )
