@@ -90,58 +90,12 @@ def load_dashboard_data():
     items = list(container.read_all_items())
     return pd.DataFrame(items)
 
-with tabs[1]:
-    st.title("Sales Lead Nurture Model Dashboard")
-    with st.spinner("Loading input data from Cosmos DB..."):
-        df = fetch_data()
-
-    if df.empty:
-        st.warning("⚠️ No input data found.")
-    else:
-        st.subheader("📄 Input Data")
-        st.dataframe(df.head())
-
-        required = [
-            'Age', 'Gender', 'Annual Income', 'Income Bracket', 'Marital Status',
-            'Employment Status', 'Region', 'Urban/Rural Flag', 'State', 'ZIP Code',
-            'Plan Preference Type', 'Web Form Completion Rate', 'Quote Requested',
-            'Application Started', 'Behavior Score', 'Application Submitted', 'Application Applied'
-        ]
-
-        missing = [col for col in required if col not in df.columns]
-        if missing:
-            st.error(f"❌ Missing columns: {missing}")
-        else:
-            input_df = df[required]
-            proba = model.predict_proba(input_df)[:, 1]
-            df["PTB_Score"] = proba * 100
-
-            def tier(score):
-                if score >= 90:
-                    return "Platinum"
-                elif score >= 75:
-                    return "Gold"
-                elif score >= 50:
-                    return "Silver"
-                else:
-                    return "Bronze"
-
-            df["Lead_Tier"] = df["PTB_Score"].apply(tier)
-
-            st.subheader("✅ Scored Results")
-            display_df = df.copy()
-            display_df["PTB_Score"] = display_df["PTB_Score"].round(2).astype(str) + "%"
-            st.dataframe(display_df)
-
-            if st.button("🚀 Clear & Upload to Cosmos DB"):
-                clear_output_container()
-                upload_results(df)
-
 with tabs[2]:
-    with tabs[2]:
+    st.title("📊 KPI Dashboard")
     dash_df = load_dashboard_data()
-    if not dash_df.empty:
-        st.title("📊 KPI Dashboard")
+    if dash_df.empty:
+        st.warning("⚠️ No scored data found in output container.")
+    else:
         st.markdown("**Key Funnel Metrics**")
 
         total = len(dash_df)
@@ -172,7 +126,7 @@ with tabs[2]:
             ("Quote Requested Rate", f"{quote_rate:.2f}%"),
             ("App Started Rate", f"{app_started_rate:.2f}%"),
             ("App Submitted Rate", f"{app_submitted_rate:.2f}%"),
-            ("Submitted + Policy Conversion", f"{submitted_to_purchased:.2f}%")
+            ("Submitted → Policy Conversion", f"{submitted_to_purchased:.2f}%")
         ]
 
         first_row = kpi_values[:4]
@@ -210,70 +164,5 @@ with tabs[2]:
         bar_html += render_bar("🥈 Silver", tier_counts.get("Silver", 0), "#608cb6")
         bar_html += render_bar("🥇 Gold", tier_counts.get("Gold", 0), "#f2c84b")
         bar_html += render_bar("🏆 Platinum", tier_counts.get("Platinum", 0), "#bb83f2")
-with tabs[3]:
-    st.title("📈 Charts Dashboard")
-    dash_df = load_dashboard_data()
-    if not dash_df.empty:
-        st.subheader("1️⃣ Lead Tier by State")
-        states = st.multiselect("Filter by State:", dash_df["State"].dropna().unique())
-        filtered1 = dash_df[dash_df["State"].isin(states)] if states else dash_df
-        fig1 = px.histogram(filtered1, x="State", color="Lead_Tier", barmode="group")
-        st.plotly_chart(fig1, use_container_width=True)
 
-        st.subheader("2️⃣ Lead Tier by Income Bracket")
-        fig2 = px.histogram(dash_df, x="Income Bracket", color="Lead_Tier", barmode="stack")
-        st.plotly_chart(fig2, use_container_width=True)
-
-        st.subheader("3️⃣ Lead Tier by Age Group")
-        ages = st.multiselect("Filter by Age Group:", dash_df["Age Group"].dropna().unique())
-        filtered3 = dash_df[dash_df["Age Group"].isin(ages)] if ages else dash_df
-        fig3 = px.histogram(filtered3, x="Age Group", color="Lead_Tier", barmode="group")
-        st.plotly_chart(fig3, use_container_width=True)
-
-        st.subheader("4️⃣ Lead Tier by Gender (Filtered by Employment)")
-        jobs = ["All"] + dash_df["Employment Status"].dropna().unique().tolist()
-        emp_filter = st.selectbox("Employment Status:", jobs)
-        filtered4 = dash_df if emp_filter == "All" else dash_df[dash_df["Employment Status"] == emp_filter]
-        fig4 = px.histogram(filtered4, x="Gender", color="Lead_Tier", barmode="group")
-        st.plotly_chart(fig4, use_container_width=True)
-
-        st.subheader("5️⃣ Quote Requested vs Purchase Channel")
-        quote_col = "Quote Requested (website)" if "Quote Requested (website)" in dash_df.columns else "Quote Requested"
-        gender_options = dash_df["Gender"].dropna().unique().tolist()
-        selected_genders = st.multiselect("Filter by Gender:", gender_options, default=gender_options)
-
-        income_options = dash_df["Income Bracket"].dropna().unique().tolist()
-        selected_incomes = st.multiselect("Filter by Income Bracket:", income_options, default=income_options)
-
-        quote_options = dash_df[quote_col].dropna().unique().tolist()
-        selected_quotes = st.multiselect("Filter by Quote Requested:", quote_options, default=quote_options)
-
-        filtered5 = dash_df[
-            (dash_df["Gender"].isin(selected_genders)) &
-            (dash_df["Income Bracket"].isin(selected_incomes)) &
-            (dash_df[quote_col].isin(selected_quotes))
-        ]
-
-        fig5 = px.histogram(
-            filtered5,
-            x="Purchase Channel",
-            color=quote_col,
-            barmode="group",
-            title="Quote Requested vs Purchase Channel"
-        )
-        st.plotly_chart(fig5, use_container_width=True)
-    else:
-        st.warning("⚠️ No scored data found in output container.")
-
-with tabs[4]:
-    dash_df = load_dashboard_data()
-    if not dash_df.empty:
-        st.title("📤 Export Scored Data")
-        st.download_button(
-            label="📥 Download Scored Leads CSV",
-            data=dash_df.to_csv(index=False),
-            file_name="scored_leads.csv",
-            mime="text/csv"
-        )
-    else:
-        st.warning("⚠️ No data available to export.")
+        st.markdown(bar_html, unsafe_allow_html=True)
