@@ -171,7 +171,6 @@ with tabs[1]:
             ("Quote Requested Rate", f"{quote_rate:.2f}%"),
             ("App Started Rate", f"{app_started_rate:.2f}%"),
             ("App Submitted Rate", f"{app_submitted_rate:.2f}%"),
-            ("Submitted + Policy Conversion", f"{submitted_to_purchased:.2f}%")
         ]
 
         first_row = kpi_values[:4]
